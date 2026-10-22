@@ -1,0 +1,791 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ytdl</title>
+<style>
+  :root {
+    --bg: #E8EEF2;
+    --shade: #c3ccd4;
+    --light: #ffffff;
+    --accent: #4db8e8;
+    --ink: #4a5a66;
+    --ink-soft: #7d8b96;
+    --warn: #e0a24d;
+    --bad: #e06d6d;
+    --ok: #5cc28f;
+    --r-sm: 4px; --r-md: 8px; --r-lg: 16px;
+    --s-sm: 1rem; --s-md: 2rem; --s-lg: 4rem;
+    --raise: 8px 8px 16px var(--shade), -8px -8px 16px var(--light);
+    --raise-sm: 4px 4px 8px var(--shade), -4px -4px 8px var(--light);
+    --inset: inset 6px 6px 12px var(--shade), inset -6px -6px 12px var(--light);
+    --inset-sm: inset 3px 3px 6px var(--shade), inset -3px -3px 6px var(--light);
+    --ease: cubic-bezier(.2,.7,.3,1);
+  }
+  @property --p { syntax: "<number>"; inherits: true; initial-value: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink);
+    font: 400 1rem/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  body { min-height: 100vh; display: flex; }
+  button, input, select { font: inherit; color: inherit; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* ---------- layout ---------- */
+  nav { width: 220px; flex: none; padding: var(--s-md) var(--s-sm); display: flex;
+    flex-direction: column; gap: .75rem; position: sticky; top: 0; height: 100vh; }
+  .brand { display: flex; align-items: center; gap: .75rem; padding: 0 .5rem 1.25rem; }
+  .brand-mark { width: 40px; height: 40px; border-radius: 50%; box-shadow: var(--raise-sm);
+    display: grid; place-items: center; }
+  .brand-mark::after { content: ""; width: 0; height: 0; margin-left: 3px;
+    border-left: 11px solid var(--accent); border-top: 7px solid transparent;
+    border-bottom: 7px solid transparent; filter: drop-shadow(0 0 4px rgba(77,184,232,.5)); }
+  .brand b { font-size: 1.25rem; letter-spacing: .02em; }
+  .nav-btn { display: flex; align-items: center; gap: .75rem; padding: .75rem 1rem;
+    border: 0; border-radius: var(--r-lg); background: var(--bg); cursor: pointer;
+    text-align: left; color: var(--ink-soft); transition: box-shadow .2s var(--ease), color .2s; }
+  .nav-btn:hover { color: var(--ink); box-shadow: var(--raise-sm); }
+  .nav-btn.active { color: var(--accent); box-shadow: var(--inset-sm); font-weight: 600; }
+  .nav-btn .count { margin-left: auto; font-size: .75rem; min-width: 1.5rem; text-align: center;
+    padding: 0 .4rem; border-radius: 999px; box-shadow: var(--inset-sm); color: var(--ink-soft); }
+  .nav-btn .count.alert { color: var(--bad); }
+  .nav-foot { margin-top: auto; font-size: .8rem; color: var(--ink-soft); padding: 0 .5rem; }
+  main { flex: 1; min-width: 0; padding: var(--s-md) var(--s-md) var(--s-lg); max-width: 1180px; }
+  h1 { font-size: 2.5rem; font-weight: 700; margin: 0 0 .25rem; letter-spacing: -.01em; }
+  .sub { color: var(--ink-soft); margin: 0 0 var(--s-md); }
+  section.view { display: none; animation: fade .3s var(--ease); }
+  section.view.active { display: block; }
+  @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* ---------- surfaces ---------- */
+  .card { background: var(--bg); border-radius: var(--r-lg); box-shadow: var(--raise);
+    padding: 1.5rem; }
+  .well { border-radius: var(--r-lg); box-shadow: var(--inset); padding: 1rem 1.25rem; }
+  .grid { display: grid; gap: var(--s-md); }
+  .row { display: flex; gap: var(--s-sm); align-items: center; flex-wrap: wrap; }
+  .muted { color: var(--ink-soft); }
+  .small { font-size: .85rem; }
+  .label { font-size: .75rem; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-soft); }
+
+  /* ---------- controls ---------- */
+  .btn { border: 0; background: var(--bg); border-radius: var(--r-lg); padding: .7rem 1.3rem;
+    box-shadow: var(--raise-sm); cursor: pointer; font-weight: 600; white-space: nowrap;
+    transition: box-shadow .15s var(--ease), transform .15s var(--ease), color .15s; }
+  .btn:hover { color: var(--accent); }
+  .btn:active, .btn.pressed { box-shadow: var(--inset-sm); transform: scale(.985); }
+  .btn.primary { color: var(--accent); }
+  .btn.danger:hover { color: var(--bad); }
+  .btn:disabled { opacity: .45; cursor: default; box-shadow: var(--raise-sm); transform: none; color: var(--ink); }
+  .btn.icon { padding: .5rem .7rem; border-radius: var(--r-md); font-weight: 400; }
+  .field { display: flex; flex-direction: column; gap: .4rem; }
+  .input { border: 0; outline: 0; background: var(--bg); border-radius: var(--r-md);
+    padding: .7rem 1rem; box-shadow: var(--inset-sm); width: 100%; min-width: 0;
+    transition: box-shadow .2s; }
+  .input:focus { box-shadow: var(--inset-sm), 0 0 0 2px rgba(77,184,232,.35); }
+  select.input { appearance: none; cursor: pointer; padding-right: 2.2rem;
+    background-image: linear-gradient(45deg, transparent 50%, var(--ink-soft) 50%),
+      linear-gradient(135deg, var(--ink-soft) 50%, transparent 50%);
+    background-position: calc(100% - 18px) 55%, calc(100% - 13px) 55%;
+    background-size: 5px 5px; background-repeat: no-repeat; }
+  .toggle { display: inline-flex; align-items: center; gap: .75rem; cursor: pointer; user-select: none; }
+  .toggle input { display: none; }
+  .toggle .track { width: 52px; height: 28px; border-radius: 999px; box-shadow: var(--inset-sm);
+    position: relative; flex: none; transition: background .25s; }
+  .toggle .track::after { content: ""; position: absolute; top: 4px; left: 4px; width: 20px;
+    height: 20px; border-radius: 50%; background: var(--bg); box-shadow: var(--raise-sm);
+    transition: transform .25s var(--ease), background .25s; }
+  .toggle input:checked + .track::after { transform: translateX(24px); background: var(--accent);
+    box-shadow: 0 0 10px rgba(77,184,232,.6); }
+  .check { width: 20px; height: 20px; border-radius: var(--r-sm); box-shadow: var(--inset-sm);
+    appearance: none; margin: 0; cursor: pointer; flex: none; display: grid; place-items: center; }
+  .check:checked { background: var(--accent); box-shadow: var(--raise-sm); }
+  .check:checked::after { content: ""; width: 6px; height: 10px; border: solid #fff;
+    border-width: 0 2px 2px 0; transform: rotate(45deg) translate(-1px,-1px); }
+  .pill { display: inline-flex; align-items: center; gap: .35rem; font-size: .75rem;
+    padding: .15rem .65rem; border-radius: 999px; box-shadow: var(--raise-sm); white-space: nowrap; }
+  .pill.accent { color: var(--accent); font-weight: 600; }
+  .pill.warn { color: var(--warn); }
+  .pill.ok { color: var(--ok); }
+  .pill.flat { box-shadow: var(--inset-sm); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
+
+  /* ---------- dashboard ---------- */
+  .dash { grid-template-columns: minmax(300px, 380px) 1fr; align-items: start; }
+  .dial-card { display: flex; flex-direction: column; align-items: center; gap: 1.5rem; padding: 2rem 1.5rem; }
+  .dial { --p: 0; --c: var(--accent); width: 260px; height: 260px; border-radius: 50%;
+    box-shadow: var(--raise); position: relative; display: grid; place-items: center; }
+  .dial::before { content: ""; position: absolute; inset: 22px; border-radius: 50%; box-shadow: var(--inset); }
+  .dial .ring { position: absolute; inset: 30px; border-radius: 50%;
+    background: conic-gradient(from -90deg, var(--c) calc(var(--p) * 1turn), transparent 0);
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 8px));
+            mask: radial-gradient(farthest-side, transparent calc(100% - 9px), #000 calc(100% - 8px));
+    filter: drop-shadow(0 0 6px rgba(77,184,232,.45)); transition: --p .8s; }
+  .dial .knob { position: absolute; inset: 30px; transform: rotate(calc(var(--p) * 1turn));
+    transition: transform .8s var(--ease); pointer-events: none; }
+  .dial .knob::after { content: ""; position: absolute; top: -1px; left: 50%; width: 10px; height: 10px;
+    margin-left: -5px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 3px var(--c), 0 0 10px var(--c); }
+  .dial .face { position: relative; width: 150px; height: 150px; border-radius: 50%;
+    box-shadow: var(--raise-sm); display: flex; flex-direction: column; align-items: center;
+    justify-content: center; text-align: center; background: linear-gradient(145deg, #f2f6f8, #dde4e9); }
+  .dial .big { font-size: 2.1rem; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .dial .cap { font-size: .75rem; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .08em; }
+  .dial.busy .ring { background: conic-gradient(from 0deg, transparent 0 55%, var(--c) 100%);
+    animation: spin 1.4s linear infinite; }
+  .dial.busy .knob { display: none; }
+  .dial.paused { --c: var(--ink-soft); }
+  .dial.paused .ring { filter: none; opacity: .5; }
+  .dial.warn { --c: var(--warn); }
+  @keyframes spin { to { transform: rotate(1turn); } }
+  .status-line { font-weight: 600; text-align: center; max-width: 300px; }
+  .status-line .dot { display: inline-block; margin-right: .5rem; vertical-align: 1px; }
+  .status-line .dot { width: 10px; height: 10px; box-shadow: 0 0 8px currentColor; }
+  .st-idle { color: var(--accent); } .st-busy { color: var(--ok); }
+  .st-paused { color: var(--ink-soft); } .st-warn { color: var(--warn); }
+  .stats { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1.25rem; }
+  .stat { padding: 1.25rem; }
+  .stat .num { font-size: 2rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .stat .num.accent { color: var(--accent); }
+  .stat .num.bad { color: var(--bad); }
+  .queue { display: flex; flex-wrap: wrap; gap: .6rem; }
+  .logbox { font: .8rem/1.55 ui-monospace, "Cascadia Mono", Consolas, monospace; white-space: pre-wrap;
+    word-break: break-word; max-height: 260px; overflow: auto; color: var(--ink-soft); }
+  .logbox.tall { max-height: calc(100vh - 230px); }
+  .logbox .e { color: var(--bad); } .logbox .n { color: var(--accent); }
+
+  /* ---------- lists / tables ---------- */
+  .toolbar { display: flex; gap: var(--s-sm); align-items: center; flex-wrap: wrap; margin-bottom: 1.5rem; }
+  .toolbar .grow { flex: 1 1 220px; }
+  .list { display: flex; flex-direction: column; gap: .9rem; }
+  .item { display: grid; grid-template-columns: auto minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.5fr) auto;
+    gap: 1rem; align-items: center; padding: .9rem 1.2rem; border-radius: var(--r-lg);
+    box-shadow: var(--raise-sm); transition: box-shadow .2s; }
+  .item:hover { box-shadow: var(--raise); }
+  .item.selected { box-shadow: var(--inset-sm); }
+  .item .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .meta { font-size: .8rem; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .actions { display: flex; gap: .5rem; }
+  .item.sched { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.6fr) 130px 120px; }
+  .item.sched > :last-child { justify-self: end; }
+  .item.failed { grid-template-columns: auto auto minmax(0, .6fr) minmax(0, 2fr); }
+  .warn-ico { color: var(--warn); cursor: help; }
+  .empty { text-align: center; padding: var(--s-lg) var(--s-sm); color: var(--ink-soft); }
+
+  /* ---------- modal ---------- */
+  .scrim { position: fixed; inset: 0; background: rgba(232,238,242,.6); backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px); display: none; align-items: center; justify-content: center;
+    padding: var(--s-sm); z-index: 10; }
+  .scrim.open { display: flex; animation: fade .25s var(--ease); }
+  .modal { width: min(640px, 100%); max-height: calc(100vh - 2rem); overflow: auto; }
+  .modal h2 { margin: 0 0 1.25rem; font-size: 1.5rem; }
+  .steps { display: flex; flex-direction: column; gap: 1.5rem; }
+  .step-n { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+    box-shadow: var(--raise-sm); font-size: .8rem; font-weight: 700; color: var(--accent); margin-right: .5rem; }
+  .found { display: flex; gap: 1.25rem; align-items: flex-start; }
+  .avatar { width: 84px; height: 84px; border-radius: 50%; flex: none; box-shadow: var(--raise-sm);
+    padding: 5px; background: var(--bg); }
+  .avatar img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
+  .found h3 { margin: 0 0 .15rem; font-size: 1.25rem; }
+  .found ul { margin: .6rem 0 0; padding-left: 1.1rem; font-size: .85rem; color: var(--ink-soft); }
+  .note { font-size: .85rem; padding: .7rem 1rem; border-radius: var(--r-md); box-shadow: var(--inset-sm); }
+  .note.warn { color: var(--warn); }
+  .note.bad { color: var(--bad); }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 1rem; margin-top: 1.75rem; }
+  .spinner { width: 18px; height: 18px; border-radius: 50%; border: 3px solid var(--shade);
+    border-top-color: var(--accent); animation: spin .8s linear infinite; display: inline-block; vertical-align: -3px; }
+
+  /* ---------- toast ---------- */
+  #toast { position: fixed; bottom: 1.5rem; left: 50%; transform: translate(-50%, 20px); opacity: 0;
+    padding: .8rem 1.4rem; border-radius: 999px; background: var(--bg); box-shadow: var(--raise);
+    transition: opacity .25s, transform .25s var(--ease); z-index: 20; font-weight: 600; pointer-events: none; }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  #toast.bad { color: var(--bad); }
+
+  /* ---------- responsive ---------- */
+  @media (max-width: 900px) {
+    body { flex-direction: column; }
+    nav { width: auto; height: auto; position: static; flex-direction: row; overflow-x: auto;
+      padding: 1rem; gap: .5rem; align-items: center; }
+    .brand { padding: 0 .5rem 0 0; }
+    .brand b, .nav-foot { display: none; }
+    .nav-btn { padding: .6rem .9rem; flex: none; }
+    main { padding: 1rem 1rem var(--s-lg); }
+    h1 { font-size: 2rem; }
+    .dash { grid-template-columns: 1fr; }
+    .item, .item.failed { grid-template-columns: auto 1fr auto; }
+    .item.sched { grid-template-columns: 1fr auto; }
+    .item .hide-sm { display: none; }
+    .form-grid { grid-template-columns: 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="brand"><div class="brand-mark"></div><b>ytdl</b></div>
+  <button class="nav-btn active" data-view="dashboard">Dashboard</button>
+  <button class="nav-btn" data-view="channels">Channels <span class="count" id="nc-channels">–</span></button>
+  <button class="nav-btn" data-view="schedule">Schedule</button>
+  <button class="nav-btn" data-view="failed">Failed <span class="count" id="nc-failed">–</span></button>
+  <button class="nav-btn" data-view="log">Log</button>
+  <div class="nav-foot" id="foot">Connecting…</div>
+</nav>
+
+<main>
+  <!-- ================= DASHBOARD ================= -->
+  <section class="view active" id="v-dashboard">
+    <h1>Dashboard</h1>
+    <p class="sub" id="dash-sub">&nbsp;</p>
+    <div class="grid dash">
+      <div class="card dial-card">
+        <div class="dial" id="dial">
+          <div class="ring"></div><div class="knob"></div>
+          <div class="face"><div class="big" id="dial-big">--:--</div><div class="cap" id="dial-cap">next check</div></div>
+        </div>
+        <div class="status-line" id="status-line"><span class="dot"></span><span id="status-text">…</span></div>
+        <div class="row" style="justify-content:center">
+          <button class="btn primary" id="btn-run">Run now</button>
+          <label class="toggle" title="Pause after the current step">
+            <input type="checkbox" id="tg-pause"><span class="track"></span><span>Paused</span>
+          </label>
+        </div>
+      </div>
+      <div class="grid" style="gap:1.5rem">
+        <div class="grid stats">
+          <div class="card stat"><div class="label">Waiting to download</div><div class="num accent" id="s-queue">–</div></div>
+          <div class="card stat"><div class="label">Last run</div><div class="num" id="s-ok">–</div><div class="small muted" id="s-ok-sub">downloaded</div></div>
+          <div class="card stat"><div class="label">Given up</div><div class="num" id="s-failed">–</div><div class="small muted">in failed list</div></div>
+          <div class="card stat"><div class="label">Channels</div><div class="num" id="s-channels">–</div><div class="small muted" id="s-sched">&nbsp;</div></div>
+        </div>
+        <div class="card">
+          <div class="label" style="margin-bottom:.9rem">Lists</div>
+          <div class="queue" id="queue"><span class="muted small">Loading…</span></div>
+        </div>
+        <div class="card">
+          <div class="row" style="justify-content:space-between;margin-bottom:.9rem">
+            <div class="label">Recent activity</div><a href="#log" data-goto="log" class="small">Full log →</a>
+          </div>
+          <div class="well logbox" id="dash-log">…</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= CHANNELS ================= -->
+  <section class="view" id="v-channels">
+    <h1>Channels</h1>
+    <p class="sub" id="ch-sub">&nbsp;</p>
+    <div class="toolbar">
+      <input class="input grow" id="ch-search" placeholder="Search channels, lists or IDs…">
+      <select class="input" id="ch-filter" style="width:auto;min-width:150px"><option value="">All lists</option></select>
+      <button class="btn danger" id="ch-delete" disabled>Delete</button>
+      <button class="btn primary" id="ch-add">+ Add channel</button>
+    </div>
+    <div class="list" id="ch-list"></div>
+  </section>
+
+  <!-- ================= SCHEDULE ================= -->
+  <section class="view" id="v-schedule">
+    <h1>Schedule</h1>
+    <p class="sub" id="sc-sub">When each channel usually uploads, and when it gets checked.</p>
+    <div class="toolbar">
+      <input class="input grow" id="sc-search" placeholder="Search…">
+      <label class="toggle"><input type="checkbox" id="sc-window"><span class="track"></span><span>Upload window open now</span></label>
+    </div>
+    <div class="list" id="sc-list"></div>
+  </section>
+
+  <!-- ================= FAILED ================= -->
+  <section class="view" id="v-failed">
+    <h1>Failed</h1>
+    <p class="sub">Videos that failed too many times. Retry puts them back in their list.</p>
+    <div class="toolbar">
+      <label class="toggle"><input type="checkbox" id="fa-all"><span class="track"></span><span>Select all</span></label>
+      <div class="grow"></div>
+      <button class="btn danger" id="fa-remove" disabled>Remove</button>
+      <button class="btn primary" id="fa-retry" disabled>Retry</button>
+    </div>
+    <div class="list" id="fa-list"></div>
+  </section>
+
+  <!-- ================= LOG ================= -->
+  <section class="view" id="v-log">
+    <h1>Log</h1>
+    <p class="sub">Everything FlexGet, yt-dlp and the tray app printed.</p>
+    <div class="toolbar">
+      <select class="input" id="lg-lines" style="width:auto">
+        <option value="200">Last 200 lines</option><option value="500" selected>Last 500 lines</option>
+        <option value="2000">Last 2000 lines</option></select>
+      <label class="toggle"><input type="checkbox" id="lg-follow" checked><span class="track"></span><span>Live</span></label>
+      <div class="grow"></div>
+      <input class="input" id="lg-filter" placeholder="Filter…" style="max-width:240px">
+    </div>
+    <div class="card"><div class="well logbox tall" id="lg-box">…</div></div>
+  </section>
+</main>
+
+<!-- ================= ADD MODAL ================= -->
+<div class="scrim" id="m-add">
+  <div class="card modal">
+    <h2>Add a channel</h2>
+    <div class="steps">
+      <div>
+        <div class="label" style="margin-bottom:.6rem"><span class="step-n">1</span>Channel link</div>
+        <div class="row" style="flex-wrap:nowrap">
+          <input class="input" id="a-q" placeholder="youtube.com/@handle, a channel or video link, or a UC… ID">
+          <button class="btn primary" id="a-look">Look up</button>
+        </div>
+      </div>
+      <div id="a-result" hidden>
+        <div class="label" style="margin-bottom:.6rem"><span class="step-n">2</span>Is this the right channel?</div>
+        <div class="well">
+          <div class="found">
+            <div class="avatar" id="a-avatar-wrap"><img id="a-avatar" alt=""></div>
+            <div style="min-width:0">
+              <h3 id="a-name"></h3>
+              <div class="small muted" id="a-id"></div>
+              <ul id="a-videos"></ul>
+            </div>
+          </div>
+        </div>
+        <div id="a-warn" class="note warn" style="margin-top:1rem" hidden></div>
+      </div>
+      <div id="a-opts" hidden>
+        <div class="label" style="margin-bottom:.6rem"><span class="step-n">3</span>Where should it go?</div>
+        <div class="form-grid">
+          <div class="field"><span class="small muted">List — pick one or type a new name</span>
+            <input class="input" id="a-list" list="dl-lists" placeholder="e.g. MUSIC"></div>
+          <div class="field"><span class="small muted">Task name in FlexGet</span>
+            <input class="input" id="a-task"></div>
+        </div>
+        <label class="toggle" style="margin-top:1.25rem"><input type="checkbox" id="a-wav"><span class="track"></span>
+          <span>Download as WAV <span class="muted small">(audio only)</span></span></label>
+      </div>
+      <div id="a-err" class="note bad" hidden></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-close>Cancel</button>
+      <button class="btn primary" id="a-save" disabled>Add channel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= EDIT MODAL ================= -->
+<div class="scrim" id="m-edit">
+  <div class="card modal">
+    <h2 id="e-title">Edit channel</h2>
+    <div class="grid" style="gap:1rem">
+      <div class="field"><span class="small muted">Task name</span><input class="input" id="e-name"></div>
+      <div class="form-grid">
+        <div class="field"><span class="small muted">List</span><input class="input" id="e-list" list="dl-lists"></div>
+        <div class="field"><span class="small muted">Channel ID</span><input class="input" id="e-id"></div>
+      </div>
+      <label class="toggle"><input type="checkbox" id="e-wav"><span class="track"></span><span>Download as WAV <span class="muted small">(audio only)</span></span></label>
+      <div class="small muted" id="e-path"></div>
+      <div id="e-err" class="note bad" hidden></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-close>Cancel</button>
+      <button class="btn primary" id="e-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ================= CONFIRM MODAL ================= -->
+<div class="scrim" id="m-confirm">
+  <div class="card modal" style="width:min(460px,100%)">
+    <h2 id="c-title">Are you sure?</h2>
+    <div id="c-body" class="muted"></div>
+    <div class="modal-actions">
+      <button class="btn" data-close>Cancel</button>
+      <button class="btn danger" id="c-ok">Delete</button>
+    </div>
+  </div>
+</div>
+
+<datalist id="dl-lists"></datalist>
+<div id="toast"></div>
+
+<script>
+"use strict";
+// ---------------------------------------------------------------- helpers
+const $ = (s, el = document) => el.querySelector(s);
+const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+async function api(path, method = "GET", body) {
+  const opt = { method, headers: {} };
+  if (method !== "GET") { opt.headers["X-YTDL"] = "1"; opt.headers["Content-Type"] = "application/json";
+    opt.body = JSON.stringify(body || {}); }
+  const r = await fetch(path, opt);
+  let data = {};
+  try { data = await r.json(); } catch (e) {}
+  if (!r.ok) throw new Error(data.error || `${r.status} ${r.statusText}`);
+  return data;
+}
+let toastTimer;
+function toast(msg, bad = false) {
+  const t = $("#toast"); t.textContent = msg; t.className = "show" + (bad ? " bad" : "");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.className = bad ? "bad" : "", 3200);
+}
+function ago(ts) {
+  if (!ts) return "never";
+  const s = Date.now() / 1000 - ts;
+  if (s < 60) return "just now";
+  if (s < 3600) return Math.round(s / 60) + " min ago";
+  if (s < 86400) return Math.round(s / 3600) + " h ago";
+  return Math.round(s / 86400) + " d ago";
+}
+const fmtTime = ts => new Date(ts * 1000).toLocaleTimeString([], { weekday: "short", hour: "2-digit", minute: "2-digit" });
+function openModal(id) { $("#" + id).classList.add("open"); }
+function closeModal(el) { el.closest(".scrim").classList.remove("open"); }
+$$(".scrim").forEach(s => {
+  s.addEventListener("click", e => { if (e.target === s || e.target.matches("[data-close]")) closeModal(s); });
+});
+document.addEventListener("keydown", e => { if (e.key === "Escape") $$(".scrim.open").forEach(s => s.classList.remove("open")); });
+
+// ---------------------------------------------------------------- navigation
+let view = "dashboard";
+function show(v) {
+  view = v;
+  $$(".nav-btn").forEach(b => b.classList.toggle("active", b.dataset.view === v));
+  $$("section.view").forEach(s => s.classList.toggle("active", s.id === "v-" + v));
+  history.replaceState(null, "", "#" + v);
+  refreshView();
+}
+$$(".nav-btn").forEach(b => b.addEventListener("click", () => show(b.dataset.view)));
+$$("[data-goto]").forEach(a => a.addEventListener("click", e => { e.preventDefault(); show(a.dataset.goto); }));
+
+// ---------------------------------------------------------------- dashboard
+let status = null;
+async function loadStatus() {
+  try {
+    status = await api("/api/status");
+    $("#foot").textContent = "Connected";
+    renderStatus();
+  } catch (e) {
+    $("#foot").textContent = "Can't reach ytdl";
+    $("#status-text").textContent = "Not connected — is the tray app running?";
+    $("#status-line").className = "status-line st-warn";
+  }
+}
+function renderStatus() {
+  const s = status; if (!s) return;
+  const state = s.cookie_problem ? "warn" : s.state;   // idle | busy | warn | paused
+  $("#status-text").textContent = s.status;
+  $("#status-line").className = "status-line st-" + state;
+  $("#tg-pause").checked = s.paused;
+  const dial = $("#dial");
+  dial.className = "dial " + (state === "idle" ? "" : state);
+  tickDial();
+  $("#s-queue").textContent = s.queue_total;
+  const lr = s.last_run || {};
+  $("#s-ok").textContent = lr.ok ?? "–";
+  $("#s-ok-sub").textContent = lr.finished ? "downloaded · " + lr.finished.slice(5, 16) : "downloaded";
+  $("#s-failed").textContent = s.failed;
+  $("#s-failed").className = "num" + (s.failed ? " bad" : "");
+  $("#nc-failed").textContent = s.failed;
+  $("#nc-failed").classList.toggle("alert", s.failed > 0);
+  $("#s-sched").textContent = s.smart ? "smart schedule on" : `every ${s.interval_minutes} min`;
+  $("#dash-sub").textContent = s.last_check ? `Last check ${ago(s.last_check)}` : "Waiting for the first check";
+  const q = Object.entries(s.queue);
+  $("#queue").innerHTML = q.length ? q.map(([k, v]) =>
+      `<span class="pill ${v ? "accent" : "flat"}">${esc(k)} <b>${v}</b></span>`).join("")
+    : `<span class="muted small">No lists yet</span>`;
+}
+function tickDial() {
+  const s = status; if (!s) return;
+  const dial = $("#dial");
+  const now = Date.now() / 1000;
+  if (s.state === "busy") {
+    $("#dial-big").textContent = "•••"; $("#dial-cap").textContent = "working"; return;
+  }
+  if (s.paused) { $("#dial-big").textContent = "II"; $("#dial-cap").textContent = "paused";
+    dial.style.setProperty("--p", 0); return; }
+  if (!s.next_run) { $("#dial-big").textContent = "--:--"; $("#dial-cap").textContent = "starting"; return; }
+  const left = Math.max(0, s.next_run - now);
+  const span = Math.max(60, s.next_run - (s.last_check || s.next_run - 3600));
+  dial.style.setProperty("--p", Math.min(1, Math.max(0, 1 - left / span)).toFixed(4));
+  const h = Math.floor(left / 3600), m = Math.floor(left % 3600 / 60), sec = Math.floor(left % 60);
+  $("#dial-big").textContent = h ? `${h}:${String(m).padStart(2, "0")}` : `${m}:${String(sec).padStart(2, "0")}`;
+  $("#dial-cap").textContent = (h ? "h:min · " : "") +
+    (s.next_count != null ? `${s.next_count} channel${s.next_count === 1 ? "" : "s"}` : "next check");
+}
+async function loadDashLog() {
+  try {
+    const d = await api("/api/log?lines=14");
+    $("#dash-log").innerHTML = colorLog(d.lines.map(l => l.replace(/^\d{4}-\d\d-\d\d /, "")));
+  } catch (e) {}
+}
+$("#btn-run").addEventListener("click", async () => {
+  try { await api("/api/run-now", "POST"); toast("Checking every channel now"); setTimeout(loadStatus, 600); }
+  catch (e) { toast(e.message, true); }
+});
+$("#tg-pause").addEventListener("change", async e => {
+  try { await api(e.target.checked ? "/api/pause" : "/api/resume", "POST");
+    toast(e.target.checked ? "Paused after the current step" : "Resumed"); loadStatus(); }
+  catch (err) { toast(err.message, true); e.target.checked = !e.target.checked; }
+});
+
+// ---------------------------------------------------------------- channels
+let channels = [], lists = [], selected = new Set();
+async function loadChannels() {
+  try {
+    const d = await api("/api/channels");
+    channels = d.channels; lists = d.lists;
+    $("#nc-channels").textContent = channels.length;
+    $("#s-channels").textContent = channels.length;
+    $("#ch-sub").textContent = `${channels.length} channels · ${d.config}`;
+    const f = $("#ch-filter"), cur = f.value;
+    f.innerHTML = `<option value="">All lists</option>` + lists.map(l => `<option>${esc(l)}</option>`).join("");
+    f.value = lists.includes(cur) ? cur : "";
+    $("#dl-lists").innerHTML = lists.map(l => `<option value="${esc(l)}">`).join("");
+    renderChannels();
+  } catch (e) {
+    $("#ch-list").innerHTML = `<div class="card empty">${esc(e.message)}</div>`;
+  }
+}
+function renderChannels() {
+  const q = $("#ch-search").value.toLowerCase().trim(), lf = $("#ch-filter").value.toLowerCase();
+  const rows = channels.filter(c => (!lf || c.list.toLowerCase() === lf) &&
+    (!q || (c.name + " " + c.list + " " + c.id).toLowerCase().includes(q)));
+  selected = new Set([...selected].filter(n => channels.some(c => c.name === n)));
+  $("#ch-delete").disabled = !selected.size;
+  $("#ch-delete").textContent = selected.size ? `Delete (${selected.size})` : "Delete";
+  if (!rows.length) { $("#ch-list").innerHTML = `<div class="card empty">No channels match.</div>`; return; }
+  $("#ch-list").innerHTML = rows.map(c => `
+    <div class="item ${selected.has(c.name) ? "selected" : ""}" data-name="${esc(c.name)}">
+      <input type="checkbox" class="check" ${selected.has(c.name) ? "checked" : ""} aria-label="Select">
+      <div style="min-width:0">
+        <div class="name">${esc(c.name)} ${c.problems.length ? `<span class="warn-ico" title="${esc(c.problems.join("\n"))}">⚠</span>` : ""}</div>
+        <div class="meta">${esc(c.id || "no channel ID")}</div>
+      </div>
+      <div class="row" style="gap:.5rem;flex-wrap:nowrap">
+        <span class="pill">${esc(c.list || "—")}</span>
+        ${c.wav ? `<span class="pill accent">WAV</span>` : `<span class="pill flat">Video</span>`}
+      </div>
+      <div class="meta hide-sm">${c.schedule ? esc(c.schedule.summary) : ""}</div>
+      <div class="actions">
+        ${c.id ? `<a class="btn icon" href="https://www.youtube.com/channel/${encodeURIComponent(c.id)}" target="_blank" rel="noopener" title="Open on YouTube">↗</a>` : ""}
+        <button class="btn icon" data-edit title="Edit">✎</button>
+      </div>
+    </div>`).join("");
+}
+$("#ch-search").addEventListener("input", renderChannels);
+$("#ch-filter").addEventListener("change", renderChannels);
+$("#ch-list").addEventListener("click", e => {
+  const item = e.target.closest(".item"); if (!item) return;
+  const name = item.dataset.name;
+  if (e.target.closest("[data-edit]")) return openEdit(channels.find(c => c.name === name));
+  if (e.target.closest(".actions")) return;
+  selected.has(name) ? selected.delete(name) : selected.add(name);
+  // update in place (re-rendering would break double-click to edit)
+  item.classList.toggle("selected", selected.has(name));
+  $(".check", item).checked = selected.has(name);
+  $("#ch-delete").disabled = !selected.size;
+  $("#ch-delete").textContent = selected.size ? `Delete (${selected.size})` : "Delete";
+});
+$("#ch-list").addEventListener("dblclick", e => {
+  const item = e.target.closest(".item"); if (item && !e.target.closest(".actions"))
+    openEdit(channels.find(c => c.name === item.dataset.name));
+});
+$("#ch-delete").addEventListener("click", () => {
+  const names = [...selected];
+  $("#c-title").textContent = `Delete ${names.length} channel${names.length > 1 ? "s" : ""}?`;
+  $("#c-body").innerHTML = `<p>These will be removed from FlexGet. Videos you've already downloaded are not affected, and a backup of the config is saved first.</p>
+    <div class="well small">${names.slice(0, 12).map(esc).join("<br>")}${names.length > 12 ? `<br>…and ${names.length - 12} more` : ""}</div>`;
+  $("#c-ok").onclick = async () => {
+    try { await api("/api/channels/delete", "POST", { names });
+      closeModal($("#c-ok")); selected.clear(); toast(`Deleted ${names.length} channel(s)`); loadChannels(); }
+    catch (e) { toast(e.message, true); }
+  };
+  openModal("m-confirm");
+});
+
+// ---- edit
+let editing = null;
+function openEdit(c) {
+  if (!c) return;
+  editing = c;
+  $("#e-title").textContent = "Edit " + c.name;
+  $("#e-name").value = c.name; $("#e-list").value = c.list; $("#e-id").value = c.id; $("#e-wav").checked = c.wav;
+  $("#e-path").textContent = "Currently saves to " + (c.list_path || "—");
+  $("#e-err").hidden = true;
+  openModal("m-edit"); $("#e-name").focus();
+}
+$("#e-save").addEventListener("click", async () => {
+  const body = { name: $("#e-name").value.trim(), list: $("#e-list").value.trim(),
+                 id: $("#e-id").value.trim(), wav: $("#e-wav").checked };
+  try {
+    await api("/api/channels/" + encodeURIComponent(editing.name), "PUT", body);
+    closeModal($("#e-save")); toast("Saved " + body.name); loadChannels();
+  } catch (e) { $("#e-err").textContent = e.message; $("#e-err").hidden = false; }
+});
+
+// ---- add
+let found = null;
+function resetAdd() {
+  found = null;
+  ["#a-q", "#a-list", "#a-task"].forEach(s => $(s).value = "");
+  $("#a-wav").checked = false;
+  $("#a-result").hidden = $("#a-opts").hidden = $("#a-err").hidden = true;
+  $("#a-save").disabled = true;
+}
+$("#ch-add").addEventListener("click", () => { resetAdd(); openModal("m-add"); setTimeout(() => $("#a-q").focus(), 50); });
+async function doLookup() {
+  const q = $("#a-q").value.trim(); if (!q) return;
+  const btn = $("#a-look");
+  btn.disabled = true; btn.innerHTML = `<span class="spinner"></span>`;
+  $("#a-err").hidden = true; $("#a-save").disabled = true;
+  try {
+    found = await api("/api/lookup?q=" + encodeURIComponent(q));
+    $("#a-name").textContent = found.name || "(name unknown)";
+    $("#a-id").textContent = [found.handle, found.id].filter(Boolean).join(" · ");
+    $("#a-videos").innerHTML = (found.videos || []).map(v => `<li>${esc(v)}</li>`).join("");
+    const img = $("#a-avatar");
+    if (found.avatar) { img.src = found.avatar; $("#a-avatar-wrap").hidden = false; }
+    else $("#a-avatar-wrap").hidden = true;
+    const warns = [];
+    if (found.duplicates.length) warns.push("Already in FlexGet as " +
+      found.duplicates.map(d => `${esc(d.name)} (${esc(d.list)})`).join(", "));
+    if (!found.feed_ok) warns.push("Couldn't read this channel's RSS feed — FlexGet may not see new videos.");
+    $("#a-warn").innerHTML = warns.join("<br>"); $("#a-warn").hidden = !warns.length;
+    if (!$("#a-task").value) $("#a-task").value = found.suggested_name;
+    $("#a-result").hidden = $("#a-opts").hidden = false;
+    $("#a-save").disabled = false;
+    $("#a-list").focus();
+  } catch (e) {
+    found = null; $("#a-result").hidden = $("#a-opts").hidden = true;
+    $("#a-err").textContent = e.message; $("#a-err").hidden = false;
+  } finally { btn.disabled = false; btn.textContent = "Look up"; }
+}
+$("#a-look").addEventListener("click", doLookup);
+$("#a-q").addEventListener("keydown", e => { if (e.key === "Enter") doLookup(); });
+$("#a-save").addEventListener("click", async () => {
+  if (!found) return;
+  const body = { name: $("#a-task").value.trim(), list: $("#a-list").value.trim(),
+                 id: found.id, wav: $("#a-wav").checked };
+  if (found.duplicates.length && !confirm("This channel is already in FlexGet. Add it again anyway?")) return;
+  try {
+    const r = await api("/api/channels", "POST", body);
+    closeModal($("#a-save"));
+    toast(`Added ${found.name || body.name} to ${body.list}${r.new_list ? " (new list)" : ""} as ${body.wav ? "WAV" : "video"}`);
+    loadChannels();
+  } catch (e) { $("#a-err").textContent = e.message; $("#a-err").hidden = false; }
+});
+
+// ---------------------------------------------------------------- schedule
+let sched = [];
+async function loadSchedule() {
+  try {
+    const d = await api("/api/schedule");
+    if (!d.enabled) { $("#sc-list").innerHTML = `<div class="card empty">Smart schedule is off — every channel is checked every interval.</div>`; return; }
+    sched = d.channels;
+    const open = sched.filter(c => c.in_window).length;
+    $("#sc-sub").textContent = `${sched.length} channels · ${open} in an upload window now` +
+      (d.next_run ? ` · next check ${fmtTime(d.next_run)}` : "");
+    renderSchedule();
+  } catch (e) { $("#sc-list").innerHTML = `<div class="card empty">${esc(e.message)}</div>`; }
+}
+function renderSchedule() {
+  const q = $("#sc-search").value.toLowerCase(), w = $("#sc-window").checked;
+  const rows = sched.filter(c => (!w || c.in_window) && (!q || (c.name + c.summary).toLowerCase().includes(q)));
+  if (!rows.length) { $("#sc-list").innerHTML = `<div class="card empty">Nothing to show.</div>`; return; }
+  $("#sc-list").innerHTML = rows.map(c => {
+    const st = c.in_window ? `<span class="pill ok"><span class="dot"></span>window open</span>`
+      : c.due ? `<span class="pill accent"><span class="dot"></span>due</span>`
+      : `<span class="pill flat">waiting</span>`;
+    return `<div class="item sched">
+      <div style="min-width:0"><div class="name">${esc(c.name)}</div>
+        <div class="meta">${c.uploads} uploads seen${c.last_upload ? " · last " + esc(c.last_upload.slice(0, 10)) : ""}</div></div>
+      <div class="meta" style="white-space:normal">${esc(c.summary)}</div>
+      <div class="meta hide-sm">checked ${esc(ago(c.last_checked))}</div>
+      ${st}</div>`;
+  }).join("");
+}
+$("#sc-search").addEventListener("input", renderSchedule);
+$("#sc-window").addEventListener("change", renderSchedule);
+
+// ---------------------------------------------------------------- failed
+let failed = [], fsel = new Set();
+async function loadFailed() {
+  try { failed = (await api("/api/failed")).rows; renderFailed(); }
+  catch (e) { $("#fa-list").innerHTML = `<div class="card empty">${esc(e.message)}</div>`; }
+}
+function renderFailed() {
+  fsel = new Set([...fsel].filter(u => failed.some(r => r.url === u)));
+  $("#fa-retry").disabled = $("#fa-remove").disabled = !fsel.size;
+  $("#fa-all").checked = failed.length && fsel.size === failed.length;
+  if (!failed.length) { $("#fa-list").innerHTML = `<div class="card empty">Nothing has failed. 🎉</div>`; return; }
+  $("#fa-list").innerHTML = failed.map(r => `
+    <div class="item failed ${fsel.has(r.url) ? "selected" : ""}" data-url="${esc(r.url)}">
+      <input type="checkbox" class="check" ${fsel.has(r.url) ? "checked" : ""}>
+      <span class="pill">${esc(r.list)}</span>
+      <div class="meta hide-sm">${esc(r.when)}</div>
+      <div class="meta"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.url)}</a></div>
+    </div>`).join("");
+}
+$("#fa-list").addEventListener("click", e => {
+  const item = e.target.closest(".item"); if (!item || e.target.closest("a")) return;
+  const u = item.dataset.url; fsel.has(u) ? fsel.delete(u) : fsel.add(u); renderFailed();
+});
+$("#fa-all").addEventListener("change", e => { fsel = e.target.checked ? new Set(failed.map(r => r.url)) : new Set(); renderFailed(); });
+$("#fa-retry").addEventListener("click", async () => {
+  try { const r = await api("/api/failed/retry", "POST", { urls: [...fsel] });
+    toast(`Re-queued ${r.requeued} video(s)`); fsel.clear(); loadFailed(); loadStatus(); }
+  catch (e) { toast(e.message, true); }
+});
+$("#fa-remove").addEventListener("click", async () => {
+  try { const r = await api("/api/failed/remove", "POST", { urls: [...fsel] });
+    toast(`Removed ${r.removed}`); fsel.clear(); loadFailed(); loadStatus(); }
+  catch (e) { toast(e.message, true); }
+});
+
+// ---------------------------------------------------------------- log
+function colorLog(lines) {
+  return lines.map(l => {
+    const e = esc(l);
+    if (/error|failed|traceback|crash|expired/i.test(l)) return `<span class="e">${e}</span>`;
+    if (/NOTIFY|done|added|downloaded/i.test(l)) return `<span class="n">${e}</span>`;
+    return e;
+  }).join("\n") || "(empty)";
+}
+async function loadLog() {
+  try {
+    const d = await api("/api/log?lines=" + $("#lg-lines").value);
+    const f = $("#lg-filter").value.toLowerCase();
+    const box = $("#lg-box"), atBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+    box.innerHTML = colorLog(f ? d.lines.filter(l => l.toLowerCase().includes(f)) : d.lines);
+    if (atBottom) box.scrollTop = box.scrollHeight;
+  } catch (e) { $("#lg-box").textContent = e.message; }
+}
+$("#lg-lines").addEventListener("change", loadLog);
+$("#lg-filter").addEventListener("input", loadLog);
+
+// ---------------------------------------------------------------- refresh loop
+function refreshView() {
+  loadStatus();
+  if (view === "dashboard") { loadDashLog(); if (!channels.length) loadChannels(); }
+  if (view === "channels") loadChannels();
+  if (view === "schedule") loadSchedule();
+  if (view === "failed") loadFailed();
+  if (view === "log") { loadLog(); setTimeout(() => $("#lg-box").scrollTop = 1e9, 200); }
+}
+setInterval(() => {
+  if (document.hidden) return;
+  loadStatus();
+  if (view === "dashboard") loadDashLog();
+  if (view === "log" && $("#lg-follow").checked) loadLog();
+}, 4000);
+setInterval(tickDial, 1000);
+window.addEventListener("hashchange", () => {
+  const v = location.hash.slice(1);
+  if (v !== view && ["dashboard", "channels", "schedule", "failed", "log"].includes(v)) show(v);
+});
+const start = location.hash.slice(1);
+show(["dashboard", "channels", "schedule", "failed", "log"].includes(start) ? start : "dashboard");
+loadChannels();
+</script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+# ==========================================================
+#  ytdl configuration  (used by ytdl.py and ytdl_tray.py)
+#  Windows paths: use single quotes so backslashes work.
+#  Copy this file to config.yaml and edit the paths.
+# ==========================================================
+
+paths:
+  base_output: 'T:\sync\Movies'                     # each list gets a subfolder here
+  lists_dir:   'T:\sync\Movies\yt-dlp\lists'        # FlexGet writes the .txt lists here
+  state_dir:   'T:\sync\Movies\yt-dlp'              # archive, logs, failed.txt etc.
+  cookies:     'T:\sync\Movies\yt-dlp\cookies.txt'
+  node:        'C:\Program Files\nodejs\node.exe'
+  flexget_config: 'T:\sync\Movies\yt-dlp'   # used by the Channel Manager (folder or file)
+
+download:
+  workers: 4              # simultaneous downloads
+  fragments: 10           # concurrent fragments per download
+  min_date: '20260101'    # YYYYMMDD - skip older videos ('' to disable)
+  sleep_min: 5            # seconds between requests (random between min/max)
+  sleep_max: 15
+  max_fails: 3            # give up on a URL after this many failed runs
+  keep_urls: false        # true = never remove finished URLs from lists
+  skip_live: true         # skip live/upcoming streams, retry after they end
+  filename: '%(channel)s - %(title)s.%(ext)s'
+
+# Settings used for any list not named under "lists" below
+defaults:
+  format: video           # video, or an audio format: wav, mp3, flac, m4a, opus
+
+# Per-list settings. The name is the list's filename without .txt
+# Options: format, output (folder), keep (true/false), filename, min_date, skip_live
+lists:
+  # music:
+  #   format: wav
+  #   output: 'T:\sync\Music\YouTube'    # optional - default is base_output\music
+  #
+  # podcasts:
+  #   format: mp3
+  #   keep: true                          # channel URLs - keep checking for new episodes
+  #
+  # samples:
+  #   format: wav
+  #   min_date: ''                        # download everything regardless of date
+
+web:
+  host: 127.0.0.1
+  password: ''
+
+tray:
+  flexget_cmd: ['flexget', 'execute']   # add '--tasks', 'name' if needed
+  # Standalone yt-dlp.exe: ['yt-dlp', '-U']
+  # Installed with pip:    ['python', '-m', 'pip', 'install', '-U', 'yt-dlp']
+  update_cmd: ['yt-dlp', '-U']
+  interval_minutes: 120                 # how often to check channels with no clear pattern
+  # Smart schedule: learn when each channel uploads and only check it then.
+  # Set to false to check every channel every interval_minutes instead.
+  smart_schedule:
+    window_hours: 3          # keep checking this long after a usual upload time
+    lead_minutes: 15         # start checking this long before it
+    active_minutes: 30       # how often to check during that window
+    max_gap_hours: 24        # always check every channel at least this often
+    refresh_hours: 24        # how often to re-read channels' upload history
+    min_uploads: 4           # uploads needed before a pattern is trusted
+    busy_channel_hours: 8    # channels uploading more often than this use interval_minutes
+  log_max_mb: 5
+  log_backups: 3

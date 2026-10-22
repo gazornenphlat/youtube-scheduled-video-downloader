@@ -1,0 +1,200 @@
+# ytdl — FlexGet + yt-dlp downloader
+
+Downloads the YouTube URLs that FlexGet puts in your list files. It runs several downloads at once, and it can run on its own from the system tray.
+
+## Files
+
+| File | What it does |
+|---|---|
+| `config.yaml` | All settings: paths, number of simultaneous downloads, per-list formats |
+| `ytdl.py` | Downloads every URL in the lists folder |
+| `ytdl_tray.py` | Tray app that runs FlexGet and then `ytdl.py` |
+| `ytdl_schedule.py` | Learns each channel's upload times, for the smart schedule |
+| `channels.py` | Channel Manager window |
+| `web_server.py`, `web/index.html` | Web interface |
+| `flexget_channels.py` | Shared code for reading and editing the FlexGet config and looking up channels |
+
+Keep all three files in the same folder.
+
+## Requirements
+
+- **Python 3.9+**
+- **yt-dlp** and **ffmpeg**, both on your PATH
+- **Node.js**, which yt-dlp uses to work around YouTube's JavaScript checks
+- **FlexGet**, only needed for the tray app
+- Python libraries:
+  ```
+  pip install pyyaml pystray pillow
+  ```
+
+## Quick start
+
+1. Edit the paths in `config.yaml`.
+2. Make sure FlexGet writes its `.txt` lists to the `lists_dir` folder.
+3. Test a single run:
+   ```
+   python ytdl.py
+   ```
+4. Start the tray app:
+   ```
+   pythonw ytdl_tray.py
+   ```
+   To start it automatically when you log in: press Win+R, enter `shell:startup`, and put a shortcut to that command in the folder that opens.
+
+## How it works
+
+### Lists
+- Each `.txt` file in `lists_dir` is one list. Put one URL per line. Lines starting with `#` or `;` are ignored.
+- Videos are saved to `base_output\<list name>\`. For example, `lists\cooking.txt` goes to `T:\sync\Movies\cooking\`.
+- A URL is removed from its list once it downloads successfully. Set `keep: true` on a list to keep its URLs, which is useful for channel or playlist URLs you want checked again on every run.
+- `downloaded.txt` records every video already fetched, so nothing downloads twice. This archive is shared by all lists.
+
+### Failures
+- A URL that fails stays in its list and is retried on the next run.
+- After `max_fails` failures (3 by default), it is removed from the list and recorded in `failed.txt`.
+
+### Smart schedule
+FlexGet doesn't check all channels on every run. ytdl learns when each channel usually uploads, using the publish times in its YouTube RSS feed, and asks FlexGet to check a channel only around those times, via `flexget execute --tasks ...`.
+
+- **Channels with a regular pattern** are checked every 30 minutes, from 15 minutes before one of their usual upload times until 3 hours after. Channels that only upload on certain weekdays are checked only on those days.
+- **Channels that upload very often, or don't have enough history yet,** are checked every `interval_minutes`.
+- **Every channel** is still checked at least once every 24 hours, so an off-schedule upload is never missed for long.
+- **Run now** checks every channel.
+- **View channel schedule** in the tray menu shows what it has learned for each channel.
+
+Upload history is refreshed daily and builds up over time. New channels added with the Channel Manager are picked up automatically. To change the timings, edit `tray: smart_schedule:` in the config. To go back to checking every channel every `interval_minutes`, set it to `false`.
+
+### Live streams
+Live, scheduled and just-ended streams are skipped and left in their list. They download on a later run, once YouTube has turned them into normal videos. Without this, ffmpeg would record a live stream in real time until it ended. To turn it off, set `skip_live: false`, either globally or per list.
+
+### Expired cookies
+If YouTube asks you to sign in or confirm you're not a bot:
+1. Downloads stop.
+2. The tray icon turns yellow, the app pauses, and you get a notification.
+3. Export a fresh `cookies.txt`, then right-click the tray icon and choose **Resume**.
+
+### The tray loop
+1. Updates yt-dlp, once a day.
+2. Runs FlexGet.
+3. Runs `ytdl.py`.
+4. Shows a notification with the results.
+5. Waits until `interval_minutes` have passed since FlexGet *started*, then repeats. If downloading took longer than the interval, the next run starts immediately.
+
+The icon is red while working, blue while idle and yellow when it needs your attention.
+
+Right-click the icon for these options:
+
+| Menu item | What it does |
+|---|---|
+| Run now | Skips the rest of the wait |
+| Pause / Resume | Pausing lets the current step finish first |
+| Open log | Opens `tray.log` |
+| Open failed list | Opens `failed.txt` |
+| Quit | Exits the tray app |
+
+Only one copy of the tray app can run at a time.
+
+## Web interface
+
+The tray app also serves a web interface at **http://localhost:8765**. To open it, double-click the tray icon or choose **Open web interface** from its menu. It has the same look as the Channel Manager window, and you can bookmark it or keep it open in a tab.
+
+| Page | What you can do |
+|---|---|
+| Dashboard | A dial counting down to the next check, the current status, **Run now**, a pause switch, the number of URLs waiting in each list, last-run results and recent activity |
+| Channels | Search, filter by list, look up and add channels (with a WAV option), edit or delete one or several, and open a channel on YouTube |
+| Schedule | What the smart schedule learned for each channel, and which channels are in an upload window right now |
+| Failed | Retry videos that kept failing, which puts them back in their list, or remove them |
+| Log | The live log, with a filter |
+
+By default it's only reachable from this PC. To use it from your phone or another computer, set these in the config:
+
+```yaml
+web:
+  host: 0.0.0.0
+  password: 'pick-something'
+```
+
+The browser will then ask for the password; any username works. The web interface refuses to start on the network without a password. To turn it off completely, set `enabled: false`.
+
+## Channel Manager
+
+`channels.py` opens a window for managing the channels in your FlexGet config. It does the same job as the web interface's Channels page. To open it, choose **Manage channels** from the tray menu. You can also run `pythonw channels.py` directly.
+
+First, set `paths: flexget_config` in `config.yaml` to your FlexGet `config.yml`.
+
+**Add channel tab**
+1. Paste a channel link. A channel page, an `@handle`, a video link or a `UC...` ID all work.
+2. Click **Look up**. It shows the channel's name, picture, ID and latest videos so you can check it's the right one. It also warns you if the channel is already in FlexGet.
+3. Pick a list, or type a new name to create one, and adjust the task name if you like. Tick **Download as WAV** for audio only; video is the default. A WAV channel's FlexGet entry writes `URL wav` to the list, so a list can mix video and WAV channels. You can change it later with **Edit...**.
+4. Click **Yes - add this channel**. The channel is added in the same format as your other entries.
+
+**Channels tab**
+- Every channel is listed in alphabetical order, with a search box and a filter by list.
+- To edit a channel, double-click it or click **Edit...**. You can change its name, list or channel ID.
+- To delete, select one or more channels and click **Delete** or press the Delete key.
+- Channels shown in orange need attention. That covers duplicates and lists saved outside the lists folder, which ytdl won't download.
+
+The FlexGet file is edited as text, so its formatting and order are kept. A backup is saved to `config_backups\` next to it before every change, and the last 20 are kept.
+
+## Configuration
+
+### Per-list formats
+Any list can be downloaded as audio. Use the list's filename without `.txt`:
+
+```yaml
+lists:
+  music:
+    format: wav                         # wav, mp3, flac, m4a, opus, or video
+    output: 'T:\sync\Music\YouTube'     # optional, a different folder
+    keep: false                         # optional, true keeps the URLs after downloading
+    min_date: ''                        # optional, overrides the date cutoff ('' = none)
+```
+
+Lists that aren't named here use the `defaults:` section, which is MP4 video unless you change it.
+
+### Main settings
+
+| Setting | Meaning |
+|---|---|
+| `download.workers` | Number of simultaneous downloads. Keep it to about 3–5 to avoid YouTube rate limits. |
+| `download.min_date` | Skip videos uploaded before this date (YYYYMMDD) |
+| `download.sleep_min` / `sleep_max` | Random pause between requests, in seconds. Lower is faster but riskier. |
+| `download.max_fails` | Number of failures before a URL is given up on |
+| `tray.interval_minutes` | Minimum time between FlexGet runs |
+| `tray.update_cmd` | How yt-dlp gets updated. Use the pip line if you installed it with pip. |
+
+In Windows paths, use **single quotes** so the backslashes are read correctly.
+
+Changes to `config.yaml` take effect on the next download run. If you change anything under `tray:`, restart the tray app.
+
+## Command line options
+
+```
+python ytdl.py                     # use config.yaml
+python ytdl.py -j 6                # override the number of simultaneous downloads
+python ytdl.py --mindate 20260101  # override the date cutoff for all lists
+python ytdl.py --config other.yaml # use a different config file
+python ytdl.py --update            # update yt-dlp first
+```
+
+Exit codes: `0` = all OK, `1` = some failures, `2` = config error, `3` = cookies expired.
+
+## Files created in `state_dir`
+
+| File | Purpose |
+|---|---|
+| `downloaded.txt` | Archive of downloaded videos |
+| `failures.json` | Failure counts for URLs still being retried |
+| `failed.txt` | URLs that were given up on |
+| `last_run.json` | Results of the last run, read by the tray app |
+| `tray.log` | Combined log. It rotates at 5 MB and keeps 3 old copies. |
+| `tray_state.json` | Date of the last yt-dlp update |
+| `schedule.json` | Upload history and last-checked time for each channel |
+| `schedule_report.txt` | Readable summary of each channel's learned schedule |
+
+## Troubleshooting
+
+- **The tray app closes immediately.** Run `python ytdl_tray.py` from a command prompt to see the error. It also shows a pop-up and saves the error to `tray_crash.txt`.
+- **Nothing downloads.** Check that the lists aren't empty and that the videos aren't older than `min_date`. Then look in `tray.log`.
+- **WAV or MP3 conversion fails.** Install ffmpeg and make sure it's on your PATH.
+- **Every download fails.** Update yt-dlp, then check your cookies.

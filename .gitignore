@@ -1,0 +1,84 @@
+# ==========================================================
+#  ytdl .gitignore
+#  Only the scripts, web UI, docs and templates belong in git.
+#  Everything personal (settings, cookies, lists, history, logs) stays local.
+# ==========================================================
+
+# --- Secrets: never upload ---
+cookies.txt
+cookies*.txt
+*.cookies
+
+# --- Your settings (config.example.yaml is the shared template) ---
+config.yaml
+config.yml
+!config.example.yaml
+!flexget-example.yml
+
+# --- Personal notes ---
+memory.md
+
+# --- Data folders (default locations next to the scripts) ---
+data/
+downloads/
+lists/
+config_backups/
+
+# --- State files (if state_dir is the project folder) ---
+downloaded.txt
+failures.json
+failed.txt
+last_run.json
+tray_state.json
+schedule.json
+schedule_report.txt
+*.tmp
+*.sqlite
+*.zip
+
+# --- Logs and crash reports ---
+*.log
+*.log.*
+tray_crash.txt
+channels_crash.txt
+
+# --- Downloaded media and partial downloads ---
+*.mp4
+*.mkv
+*.webm
+*.wav
+*.mp3
+*.m4a
+*.flac
+*.opus
+*.aac
+*.ogg
+*.part
+*.ytdl
+*.temp.*
+
+# --- Old batch version ---
+*.bat
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+*.egg-info/
+
+# --- Editors and OS junk ---
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# --- Local-only / bundled binaries and update bundles ---
+ytdl/
+ytdl-update/
+ytdl-github.zip
+*.exe
+*.exe.old
