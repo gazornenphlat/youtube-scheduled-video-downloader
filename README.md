@@ -116,6 +116,16 @@ web:
 
 The browser will then ask for the password; any username works. The web interface refuses to start on the network without a password. To turn it off completely, set `enabled: false`.
 
+### Screenshots
+
+| Dashboard | Channels |
+|---|---|
+| ![Dashboard](screenshots/dashboard.png) | ![Channels](screenshots/channels.png) |
+
+| Schedule | Failed | Log |
+|---|---|---|
+| ![Schedule](screenshots/schedule.png) | ![Failed](screenshots/failed.png) | ![Log](screenshots/log.png) |
+
 ## Channel Manager
 
 `channels.py` opens a window for managing the channels in your FlexGet config. It does the same job as the web interface's Channels page. To open it, choose **Manage channels** from the tray menu. You can also run `pythonw channels.py` directly.
