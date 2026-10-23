@@ -205,6 +205,7 @@ Exit codes: `0` = all OK, `1` = some failures, `2` = config error, `3` = cookies
 ## Troubleshooting
 
 - **The tray app closes immediately.** Run `python ytdl_tray.py` from a command prompt to see the error. It also shows a pop-up and saves the error to `tray_crash.txt`.
+- **"Couldn't find flexget" / FlexGet errors.** FlexGet must be installed and on your PATH. Install it with `pip install flexget`, then check `flexget --version` works in a command prompt. If you installed it in a virtual environment, point `tray.flexget_cmd` in `config.yaml` at the full path to the executable. The tray app also needs `paths.flexget_config` to point at your FlexGet `config.yml` (or its folder).
 - **Nothing downloads.** Check that the lists aren't empty and that the videos aren't older than `min_date`. Then look in `tray.log`.
 - **WAV or MP3 conversion fails.** Install ffmpeg and make sure it's on your PATH.
 - **Every download fails.** Update yt-dlp, then check your cookies.

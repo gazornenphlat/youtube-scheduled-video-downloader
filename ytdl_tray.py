@@ -258,7 +258,9 @@ class Runner:
         self.set_status("Updating yt-dlp", "busy")
         self.run(UPDATE_CMD, "yt-dlp update")
         state["last_update"] = today
-        TRAY_STATE.write_text(json.dumps(state, indent=1), encoding="utf-8")
+        tmp = TRAY_STATE.with_suffix(TRAY_STATE.suffix + ".tmp")
+        tmp.write_text(json.dumps(state, indent=1), encoding="utf-8")
+        os.replace(tmp, TRAY_STATE)
 
     def report(self, code):
         s = load_json(SUMMARY_FILE)

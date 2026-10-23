@@ -14,6 +14,7 @@ import base64
 import datetime as dt
 import hmac
 import json
+import os
 import re
 import threading
 import traceback
@@ -74,8 +75,10 @@ class WebApp:
 
     def write_failed(self, rows):
         f = self.state_dir / "failed.txt"
-        f.write_text("".join(f"{r['when']}\t{r['list']}\t{r['url']}\n" for r in rows),
-                     encoding="utf-8")
+        tmp = f.with_suffix(f.suffix + ".tmp")
+        tmp.write_text("".join(f"{r['when']}\t{r['list']}\t{r['url']}\n" for r in rows),
+                       encoding="utf-8")
+        os.replace(tmp, f)
 
     # ---------- API ----------
     def status(self):

@@ -137,11 +137,20 @@ def read_urls(listfile: Path):
     return urls
 
 
+def atomic_write_text(path: Path, text: str, encoding: str = "utf-8"):
+    """Write text to path atomically (tmp file + replace), so a crash mid-write
+    can't leave a half-written/truncated file behind."""
+    path = Path(path)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text, encoding=encoding)
+    os.replace(tmp, path)
+
+
 def remove_from_list(listfile: Path, url: str):
     with list_lock:
         lines = listfile.read_text(encoding="utf-8", errors="ignore").splitlines()
         kept = [l for l in lines if (l.split() or [""])[0] != url]
-        listfile.write_text("\n".join(kept) + ("\n" if kept else ""), encoding="utf-8")
+        atomic_write_text(listfile, "\n".join(kept) + ("\n" if kept else ""), encoding="utf-8")
 
 
 def load_fails():
@@ -169,7 +178,7 @@ def record_result(listfile: Path, url: str, ok: bool) -> bool:
                 fails[url] = n
             changed = True
         if changed:
-            CFG.fails_file.write_text(json.dumps(fails, indent=1), encoding="utf-8")
+            atomic_write_text(CFG.fails_file, json.dumps(fails, indent=1), encoding="utf-8")
     return gave_up
 
 
@@ -267,7 +276,7 @@ def write_summary(counts, gave_up_urls):
                 cookies_expired=cookies_bad.is_set(),
                 finished=f"{dt.datetime.now():%Y-%m-%d %H:%M:%S}")
     try:
-        CFG.summary_file.write_text(json.dumps(data, indent=1), encoding="utf-8")
+        atomic_write_text(CFG.summary_file, json.dumps(data, indent=1), encoding="utf-8")
     except Exception as e:
         print(f"Couldn't write summary: {e}")
 
