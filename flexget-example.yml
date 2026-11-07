@@ -1,0 +1,22 @@
+# Example FlexGet config.yml for use with ytdl.
+# Each task watches one YouTube channel's RSS feed and appends new video
+# URLs to a list file in ytdl's lists folder. The Channel Manager
+# (channels.py) adds, edits and removes tasks in this format for you.
+#
+# Change C:/ytdl/data/lists to your lists_dir (forward slashes are fine).
+
+tasks:
+  ExampleChannel:
+    rss:
+      url: https://www.youtube.com/feeds/videos.xml?channel_id=UCxxxxxxxxxxxxxxxxxxxxxx
+    exec:
+      - echo {{url}} >> "C:/ytdl/data/lists/Example.txt"
+    accept_all: yes
+
+  ExampleMusicChannel:
+    rss:
+      url: https://www.youtube.com/feeds/videos.xml?channel_id=UCyyyyyyyyyyyyyyyyyyyyyy
+    exec:
+      # the word "wav" after {{url}} makes ytdl download this channel as WAV
+      - echo {{url}} wav >> "C:/ytdl/data/lists/Music.txt"
+    accept_all: yes

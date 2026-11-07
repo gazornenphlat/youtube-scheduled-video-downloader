@@ -1,21 +1,31 @@
 # ==========================================================
-#  ytdl configuration  (used by ytdl.py and ytdl_tray.py)
+#  ytdl configuration  (used by ytdl.py, ytdl_tray.py and channels.py)
+#
+#  On first run this file is copied to config.yaml - edit config.yaml,
+#  not this file. config.yaml is ignored by git so your settings stay private.
+#
 #  Windows paths: use single quotes so backslashes work.
-#  Copy this file to config.yaml and edit the paths.
+#  Leave a path empty ('') to use the default shown in the comment.
 # ==========================================================
 
 paths:
-  base_output: 'T:\sync\Movies'                     # each list gets a subfolder here
-  lists_dir:   'T:\sync\Movies\yt-dlp\lists'        # FlexGet writes the .txt lists here
-  state_dir:   'T:\sync\Movies\yt-dlp'              # archive, logs, failed.txt etc.
-  cookies:     'T:\sync\Movies\yt-dlp\cookies.txt'
-  node:        'C:\Program Files\nodejs\node.exe'
-  flexget_config: 'T:\sync\Movies\yt-dlp'   # used by the Channel Manager (folder or file)
+  base_output: ''         # where videos are saved, one subfolder per list
+                          #   default: downloads\ next to the scripts
+  state_dir: ''           # archive, logs, failed.txt etc.
+                          #   default: data\ next to the scripts
+  lists_dir: ''           # where FlexGet writes the .txt URL lists
+                          #   default: <state_dir>\lists
+  cookies: ''             # optional YouTube cookies.txt (Netscape format)
+                          #   e.g. 'C:\ytdl\cookies.txt'
+  node: ''                # optional Node.js for yt-dlp's JS challenges
+                          #   e.g. 'C:\Program Files\nodejs\node.exe'
+  flexget_config: ''      # your FlexGet config.yml (file or folder) - used by the Channel Manager
+                          #   default: %USERPROFILE%\flexget\config.yml
 
 download:
-  workers: 4              # simultaneous downloads
+  workers: 3              # simultaneous downloads (3-5 recommended)
   fragments: 10           # concurrent fragments per download
-  min_date: '20260101'    # YYYYMMDD - skip older videos ('' to disable)
+  min_date: ''            # YYYYMMDD - skip videos uploaded before this ('' = no limit)
   sleep_min: 5            # seconds between requests (random between min/max)
   sleep_max: 15
   max_fails: 3            # give up on a URL after this many failed runs
@@ -32,19 +42,17 @@ defaults:
 lists:
   # music:
   #   format: wav
-  #   output: 'T:\sync\Music\YouTube'    # optional - default is base_output\music
+  #   output: 'D:\Music\YouTube'          # optional - default is base_output\music
   #
   # podcasts:
   #   format: mp3
   #   keep: true                          # channel URLs - keep checking for new episodes
-  #
-  # samples:
-  #   format: wav
-  #   min_date: ''                        # download everything regardless of date
 
 web:
-  host: 127.0.0.1
-  password: ''
+  enabled: true
+  host: 127.0.0.1        # 127.0.0.1 = this PC only. 0.0.0.0 = any device on your network
+  port: 8765             # open http://localhost:8765 (or http://<this-pc>:8765 from another device)
+  password: ''           # optional - leave empty for no password
 
 tray:
   flexget_cmd: ['flexget', 'execute']   # add '--tasks', 'name' if needed

@@ -106,15 +106,7 @@ The tray app also serves a web interface at **http://localhost:8765**. To open i
 | Failed | Retry videos that kept failing, which puts them back in their list, or remove them |
 | Log | The live log, with a filter |
 
-By default it's only reachable from this PC. To use it from your phone or another computer, set these in the config:
-
-```yaml
-web:
-  host: 0.0.0.0
-  password: 'pick-something'
-```
-
-The browser will then ask for the password; any username works. The web interface refuses to start on the network without a password. To turn it off completely, set `enabled: false`.
+By default it's only reachable from this PC. To use it from your phone or another computer on your network, set `host: 0.0.0.0` in the config, then open `http://<this PC's name or IP>:8765`. No password is needed. If you want one, set `password:`; the browser will then ask for it, and any username works. Windows Firewall may ask whether to allow Python on private networks the first time. To turn the web interface off completely, set `enabled: false`.
 
 ### Screenshots
 
