@@ -33,7 +33,8 @@ try:
     from flexget_channels import (Channel, FlexgetConfig, CHANNEL_ID_RE, UA,
                                   load_settings, lookup_channel, suggest_task_name,
                                   validate, touch_list, HERE,
-                                  read_waiting, remove_waiting)
+                                  read_waiting, remove_waiting, fetch_title,
+                                  load_state_dir, load_titles, save_titles)
 except ImportError as _e:
     _msg = (f"Missing library: {_e.name}\n\n" +
             ("tkinter comes with Python. Re-run the Python installer, choose Modify, "
@@ -501,7 +502,7 @@ class App(tk.Tk):
         self.wait_tree = ttk.Treeview(mid, columns=("check", "list", "url", "format"),
                                       show="headings", selectmode="none")
         for c, label, w, stretch in (("check", "", 40, False), ("list", "List", 130, False),
-                                     ("url", "Video link", 420, True),
+                                     ("url", "Video", 420, True),
                                      ("format", "Format", 70, False)):
             self.wait_tree.heading(c, text=label)
             self.wait_tree.column(c, width=w, anchor="center" if c == "check" else "w",
@@ -524,18 +525,66 @@ class App(tk.Tk):
         self.wait_items = {}      # key -> (list_path, url, format)
         self.wait_checked = set() # keys that are ticked
 
+        # Video titles are looked up on a background thread and cached in titles.json
+        self.titles_file = load_state_dir() / "titles.json"
+        self.titles = load_titles(self.titles_file)
+        self.title_lock = threading.Lock()
+        self.title_queue, self.title_done, self.title_failed = [], [], set()
+        self.title_busy = False
+        self.after(500, self.drain_titles)
+
     def refresh_waiting(self):
         self.wait_tree.delete(*self.wait_tree.get_children())
         self.wait_items.clear()
         self.wait_checked.clear()
         # Row ids are plain numbers; the path and URL live in wait_items.
+        to_fetch = []
         for i, (path, url, fmt) in enumerate(read_waiting(self.cfg.lists_dir)):
             key = str(i)
             self.wait_items[key] = (path, url, fmt)
+            if url not in self.titles and url not in self.title_failed:
+                to_fetch.append(url)
             self.wait_tree.insert("", "end", iid=key, values=(
-                self.CHECK_OFF, Path(path).stem, url, fmt.upper() if fmt else "List default"))
+                self.CHECK_OFF, Path(path).stem, self.titles.get(url, url),
+                fmt.upper() if fmt else "List default"))
         n = len(self.wait_items)
         self.wait_count.config(text=f"{n} waiting")
+        self.queue_titles(to_fetch)
+
+    def queue_titles(self, urls):
+        with self.title_lock:
+            for u in dict.fromkeys(urls):          # unique, keep order
+                if u not in self.title_queue:
+                    self.title_queue.append(u)
+            if self.title_queue and not self.title_busy:
+                self.title_busy = True
+                threading.Thread(target=self._title_worker, daemon=True).start()
+
+    def _title_worker(self):
+        while True:
+            with self.title_lock:
+                if not self.title_queue:
+                    self.title_busy = False
+                    return
+                url = self.title_queue.pop(0)
+            self.title_done.append((url, fetch_title(url)))
+
+    def drain_titles(self):
+        """Runs on the Tk thread: apply finished title lookups to the list."""
+        changed = False
+        while self.title_done:
+            url, title = self.title_done.pop(0)
+            changed = True
+            if title:
+                self.titles[url] = title
+                for key, (_, u, _) in self.wait_items.items():
+                    if u == url:
+                        self.wait_tree.set(key, "url", title)
+            else:
+                self.title_failed.add(url)
+        if changed and not self.title_busy:
+            save_titles(self.titles_file, self.titles)
+        self.after(500, self.drain_titles)
 
     def wait_click(self, event):
         if self.wait_tree.identify_region(event.x, event.y) not in ("cell", "tree"):

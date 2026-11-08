@@ -17,6 +17,7 @@ import json
 import os
 import re
 import threading
+import time
 import traceback
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -38,6 +39,13 @@ class WebApp:
         self.logfile = Path(logfile)
         self.log = log
         self.lock = threading.Lock()      # serialise FlexGet config edits
+        # Video titles for the Waiting page, looked up in the background
+        self.titles_file = self.state_dir / "titles.json"
+        self.titles = fc.load_titles(self.titles_file)
+        self.title_lock = threading.Lock()
+        self.title_queue = []             # urls waiting for a title
+        self.title_retry = {}             # url -> time to try again (after a failure)
+        self.title_busy = False           # is the lookup thread running?
 
     # ---------- helpers ----------
     def cfg(self):
@@ -210,8 +218,41 @@ class WebApp:
         return {"ok": True, "requeued": moved}
 
     def waiting_rows(self):
-        return [{"list": Path(p).stem, "url": u, "format": f}
-                for p, u, f in fc.read_waiting(self.lists_dir)]
+        items = fc.read_waiting(self.lists_dir)
+        self.queue_titles([u for _, u, _ in items])
+        with self.title_lock:
+            rows = [{"list": Path(p).stem, "url": u, "format": f, "title": self.titles.get(u)}
+                    for p, u, f in items]
+            pending = self.title_busy
+        return {"rows": rows, "pending": pending}
+
+    def queue_titles(self, urls):
+        """Queue titles that aren't known yet and start the lookup thread if idle."""
+        now = time.time()
+        with self.title_lock:
+            for u in urls:
+                if u in self.titles or u in self.title_queue or self.title_retry.get(u, 0) > now:
+                    continue
+                self.title_queue.append(u)
+            if self.title_queue and not self.title_busy:
+                self.title_busy = True
+                threading.Thread(target=self._title_worker, daemon=True, name="titles").start()
+
+    def _title_worker(self):
+        while True:
+            with self.title_lock:
+                if not self.title_queue:
+                    self.title_busy = False
+                    break
+                url = self.title_queue.pop(0)
+            title = fc.fetch_title(url)
+            with self.title_lock:
+                if title:
+                    self.titles[url] = title
+                else:
+                    self.title_retry[url] = time.time() + 600   # try again in 10 minutes
+                if not self.title_queue:
+                    fc.save_titles(self.titles_file, self.titles)
 
     def remove_waiting(self, body):
         # Only lists that exist in the lists folder are accepted (no path tricks).
@@ -313,7 +354,7 @@ def make_handler(app: WebApp, host: str, port: int, password: str):
                     if path == "/api/failed":
                         return self.send_json({"rows": app.failed_rows()})
                     if path == "/api/waiting":
-                        return self.send_json({"rows": app.waiting_rows()})
+                        return self.send_json(app.waiting_rows())
                     if path == "/api/log":
                         n = int((q.get("lines") or ["300"])[0])
                         return self.send_json(app.log_tail(min(max(n, 10), 3000)))

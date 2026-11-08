@@ -8,6 +8,7 @@ web interface (web_server.py):
 """
 import datetime as dt
 import html
+import json
 import os
 import re
 import shutil
@@ -15,6 +16,7 @@ import subprocess
 import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from urllib.parse import quote
 
 import yaml
 
@@ -396,6 +398,46 @@ def read_waiting(lists_dir: Path):
             fmt = parts[1].lower() if len(parts) > 1 else ""
             items.append((f, url, fmt))
     return items
+
+
+def load_state_dir():
+    """The state_dir from config.yaml (default: data folder next to the scripts)."""
+    try:
+        cfg = yaml.safe_load(CONFIG_FILE.read_text(encoding="utf-8")) or {}
+    except Exception:
+        cfg = {}
+    return Path((cfg.get("paths") or {}).get("state_dir") or HERE / "data")
+
+
+def load_titles(path):
+    """Cached video titles: {url: title}."""
+    try:
+        return json.loads(Path(path).read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+def save_titles(path, titles):
+    try:
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(json.dumps(titles, ensure_ascii=False), encoding="utf-8")
+        os.replace(tmp, path)
+    except OSError:
+        pass
+
+
+def fetch_title(url, timeout=10):
+    """Video title from YouTube's public oEmbed endpoint. None if it can't be
+    found (offline, private, removed, or not a single video)."""
+    api = "https://www.youtube.com/oembed?format=json&url=" + quote(url, safe="")
+    try:
+        data = json.loads(fetch(api, timeout=timeout))
+        title = str(data.get("title") or "").strip()
+        return title or None
+    except Exception:
+        return None
 
 
 def remove_waiting(pairs):

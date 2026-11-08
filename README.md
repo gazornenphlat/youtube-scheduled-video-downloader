@@ -102,7 +102,7 @@ The tray app also serves a web interface at **http://localhost:8765**. To open i
 |---|---|
 | Dashboard | A dial counting down to the next check, the current status, **Run now**, a pause switch, the number of URLs waiting in each list, last-run results and recent activity |
 | Channels | Search, filter by list, look up and add channels (with a WAV option), edit or delete one or several, and open a channel on YouTube |
-| Waiting | Every URL waiting to download, with its list and format. Tick links and **Delete selected** to remove them from the lists so they aren't downloaded |
+| Waiting | Every video waiting to download, shown by title, with its list and format. Tick videos and **Delete selected** to remove them from the lists so they aren't downloaded |
 | Schedule | What the smart schedule learned for each channel, and which channels are in an upload window right now |
 | Failed | Retry videos that kept failing, which puts them back in their list, or remove them |
 | Log | The live log, with a filter |
@@ -139,7 +139,7 @@ First, set `paths: flexget_config` in `config.yaml` to your FlexGet `config.yml`
 
 **Waiting tab**
 
-Shows every URL in your download lists that hasn't been downloaded yet, with its list and format.
+Shows every video in your download lists that hasn't been downloaded yet, by its title, with its list and format. Titles are looked up from YouTube once and remembered in `titles.json`, so the list may show links for a moment before the titles appear.
 1. Click a row (or its box) to tick it. Click again to untick.
 2. **Tick all** and **Clear ticks** work on the whole list.
 3. Press **Delete selected**. The ticked links are removed from their list files, so ytdl won't download them.
@@ -203,6 +203,7 @@ Exit codes: `0` = all OK, `1` = some failures, `2` = config error, `3` = cookies
 | `tray_state.json` | Date of the last yt-dlp update |
 | `schedule.json` | Upload history and last-checked time for each channel |
 | `schedule_report.txt` | Readable summary of each channel's learned schedule |
+| `titles.json` | Video titles cached for the Waiting page |
 
 ## Troubleshooting
 

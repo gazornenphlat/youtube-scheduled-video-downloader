@@ -169,6 +169,7 @@
   .item.sched > :last-child { justify-self: end; }
   .item.failed { grid-template-columns: auto auto minmax(0, .6fr) minmax(0, 2fr); }
   .item.waiting { grid-template-columns: auto minmax(0, 1fr) minmax(0, .5fr) minmax(0, 3fr); }
+  .item.waiting .meta a { color: var(--ink); font-size: .9rem; }
   .warn-ico { color: var(--warn); cursor: help; }
   .empty { text-align: center; padding: var(--s-lg) var(--s-sm); color: var(--ink-soft); }
 
@@ -758,11 +759,16 @@ $("#fa-remove").addEventListener("click", async () => {
 });
 
 // ---------------------------------------------------------------- waiting
-let waiting = [], wsel = new Set();
+let waiting = [], wsel = new Set(), waitTimer;
 const wkey = r => JSON.stringify([r.list, r.url]);
 async function loadWaiting() {
-  try { waiting = (await api("/api/waiting")).rows; renderWaiting(); }
-  catch (e) { $("#wa-list").innerHTML = `<div class="card empty">${esc(e.message)}</div>`; }
+  clearTimeout(waitTimer);
+  try {
+    const d = await api("/api/waiting");
+    waiting = d.rows; renderWaiting();
+    // Titles are looked up in the background: check again shortly while any are missing
+    if (d.pending && view === "waiting") waitTimer = setTimeout(loadWaiting, 2000);
+  } catch (e) { $("#wa-list").innerHTML = `<div class="card empty">${esc(e.message)}</div>`; }
 }
 function renderWaiting() {
   const keys = new Set(waiting.map(wkey));
@@ -778,7 +784,7 @@ function renderWaiting() {
       <input type="checkbox" class="check" ${on ? "checked" : ""}>
       <span class="pill">${esc(r.list)}</span>
       <div class="meta">${esc(r.format ? r.format.toUpperCase() : "List default")}</div>
-      <div class="meta"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.url)}</a></div>
+      <div class="meta"><a href="${esc(r.url)}" target="_blank" rel="noopener" title="${esc(r.url)}">${esc(r.title || r.url)}</a></div>
     </div>`; }).join("");
 }
 $("#wa-list").addEventListener("click", e => {
