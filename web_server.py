@@ -209,6 +209,20 @@ class WebApp:
         self.log(f"Web: re-queued {moved} failed URL(s)")
         return {"ok": True, "requeued": moved}
 
+    def waiting_rows(self):
+        return [{"list": Path(p).stem, "url": u, "format": f}
+                for p, u, f in fc.read_waiting(self.lists_dir)]
+
+    def remove_waiting(self, body):
+        # Only lists that exist in the lists folder are accepted (no path tricks).
+        names = {f.stem: f for f in self.lists_dir.glob("*.txt")} if self.lists_dir.is_dir() else {}
+        pairs = []
+        for it in body.get("items") or []:
+            lst, url = str(it.get("list", "")), str(it.get("url", "")).strip()
+            if lst in names and url:
+                pairs.append((names[lst], url))
+        return {"ok": True, "removed": fc.remove_waiting(pairs)}
+
     def remove_failed(self, body):
         urls = set(body.get("urls") or [])
         rows = self.failed_rows()
@@ -298,6 +312,8 @@ def make_handler(app: WebApp, host: str, port: int, password: str):
                         return self.send_json(app.schedule())
                     if path == "/api/failed":
                         return self.send_json({"rows": app.failed_rows()})
+                    if path == "/api/waiting":
+                        return self.send_json({"rows": app.waiting_rows()})
                     if path == "/api/log":
                         n = int((q.get("lines") or ["300"])[0])
                         return self.send_json(app.log_tail(min(max(n, 10), 3000)))
@@ -320,6 +336,8 @@ def make_handler(app: WebApp, host: str, port: int, password: str):
                         return self.send_json(app.retry_failed(b))
                     if path == "/api/failed/remove":
                         return self.send_json(app.remove_failed(b))
+                    if path == "/api/waiting/remove":
+                        return self.send_json(app.remove_waiting(b))
                 elif method == "PUT":
                     m = re.fullmatch(r"/api/channels/(.+)", path)
                     if m:

@@ -102,6 +102,7 @@ The tray app also serves a web interface at **http://localhost:8765**. To open i
 |---|---|
 | Dashboard | A dial counting down to the next check, the current status, **Run now**, a pause switch, the number of URLs waiting in each list, last-run results and recent activity |
 | Channels | Search, filter by list, look up and add channels (with a WAV option), edit or delete one or several, and open a channel on YouTube |
+| Waiting | Every URL waiting to download, with its list and format. Tick links and **Delete selected** to remove them from the lists so they aren't downloaded |
 | Schedule | What the smart schedule learned for each channel, and which channels are in an upload window right now |
 | Failed | Retry videos that kept failing, which puts them back in their list, or remove them |
 | Log | The live log, with a filter |

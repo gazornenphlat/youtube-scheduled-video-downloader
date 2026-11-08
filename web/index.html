@@ -168,6 +168,7 @@
   .item.sched { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.6fr) 130px 120px; }
   .item.sched > :last-child { justify-self: end; }
   .item.failed { grid-template-columns: auto auto minmax(0, .6fr) minmax(0, 2fr); }
+  .item.waiting { grid-template-columns: auto minmax(0, 1fr) minmax(0, .5fr) minmax(0, 3fr); }
   .warn-ico { color: var(--warn); cursor: help; }
   .empty { text-align: center; padding: var(--s-lg) var(--s-sm); color: var(--ink-soft); }
 
@@ -213,7 +214,7 @@
     main { padding: 1rem 1rem var(--s-lg); }
     h1 { font-size: 2rem; }
     .dash { grid-template-columns: 1fr; }
-    .item, .item.failed { grid-template-columns: auto 1fr auto; }
+    .item, .item.failed, .item.waiting { grid-template-columns: auto 1fr auto; }
     .item.sched { grid-template-columns: 1fr auto; }
     .item .hide-sm { display: none; }
     .form-grid { grid-template-columns: 1fr; }
@@ -227,6 +228,7 @@
   <div class="brand"><div class="brand-mark"></div><b>ytdl</b></div>
   <button class="nav-btn active" data-view="dashboard">Dashboard</button>
   <button class="nav-btn" data-view="channels">Channels <span class="count" id="nc-channels">–</span></button>
+  <button class="nav-btn" data-view="waiting">Waiting <span class="count" id="nc-waiting">–</span></button>
   <button class="nav-btn" data-view="schedule">Schedule</button>
   <button class="nav-btn" data-view="failed">Failed <span class="count" id="nc-failed">–</span></button>
   <button class="nav-btn" data-view="log">Log</button>
@@ -298,6 +300,18 @@
   </section>
 
   <!-- ================= FAILED ================= -->
+  <section class="view" id="v-waiting">
+    <h1>Waiting</h1>
+    <p class="sub">URLs in your download lists that haven't downloaded yet. Tick the ones you don't want, then delete them. They won't be downloaded.</p>
+    <div class="toolbar">
+      <label class="toggle"><input type="checkbox" id="wa-all"><span class="track"></span><span>Select all</span></label>
+      <span class="muted small" id="wa-count"></span>
+      <div class="grow"></div>
+      <button class="btn danger" id="wa-remove" disabled>Delete selected</button>
+    </div>
+    <div class="list" id="wa-list"></div>
+  </section>
+
   <section class="view" id="v-failed">
     <h1>Failed</h1>
     <p class="sub">Videos that failed too many times. Retry puts them back in their list.</p>
@@ -480,6 +494,7 @@ function renderStatus() {
   dial.className = "dial " + (state === "idle" ? "" : state);
   tickDial();
   $("#s-queue").textContent = s.queue_total;
+  $("#nc-waiting").textContent = s.queue_total;
   const lr = s.last_run || {};
   $("#s-ok").textContent = lr.ok ?? "–";
   $("#s-ok-sub").textContent = lr.finished ? "downloaded · " + lr.finished.slice(5, 16) : "downloaded";
@@ -742,6 +757,44 @@ $("#fa-remove").addEventListener("click", async () => {
   catch (e) { toast(e.message, true); }
 });
 
+// ---------------------------------------------------------------- waiting
+let waiting = [], wsel = new Set();
+const wkey = r => JSON.stringify([r.list, r.url]);
+async function loadWaiting() {
+  try { waiting = (await api("/api/waiting")).rows; renderWaiting(); }
+  catch (e) { $("#wa-list").innerHTML = `<div class="card empty">${esc(e.message)}</div>`; }
+}
+function renderWaiting() {
+  const keys = new Set(waiting.map(wkey));
+  wsel = new Set([...wsel].filter(k => keys.has(k)));
+  $("#wa-count").textContent = `${waiting.length} waiting`;
+  $("#wa-remove").disabled = !wsel.size;
+  $("#wa-all").checked = waiting.length > 0 && wsel.size === waiting.length;
+  if (!waiting.length) { $("#wa-list").innerHTML = `<div class="card empty">Nothing is waiting to download.</div>`; return; }
+  $("#wa-list").innerHTML = waiting.map((r, i) => {
+    const on = wsel.has(wkey(r));
+    return `
+    <div class="item waiting ${on ? "selected" : ""}" data-idx="${i}">
+      <input type="checkbox" class="check" ${on ? "checked" : ""}>
+      <span class="pill">${esc(r.list)}</span>
+      <div class="meta">${esc(r.format ? r.format.toUpperCase() : "List default")}</div>
+      <div class="meta"><a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.url)}</a></div>
+    </div>`; }).join("");
+}
+$("#wa-list").addEventListener("click", e => {
+  const item = e.target.closest(".item"); if (!item || e.target.closest("a")) return;
+  const k = wkey(waiting[+item.dataset.idx]); wsel.has(k) ? wsel.delete(k) : wsel.add(k); renderWaiting();
+});
+$("#wa-all").addEventListener("change", e => { wsel = e.target.checked ? new Set(waiting.map(wkey)) : new Set(); renderWaiting(); });
+$("#wa-remove").addEventListener("click", async () => {
+  const items = waiting.filter(r => wsel.has(wkey(r))).map(r => ({ list: r.list, url: r.url }));
+  if (!items.length) return;
+  if (!confirm(`Delete ${items.length} link(s) from the download lists? They will NOT be downloaded.`)) return;
+  try { const r = await api("/api/waiting/remove", "POST", { items });
+    toast(`Deleted ${r.removed} link(s)`); wsel.clear(); loadWaiting(); loadStatus(); }
+  catch (e) { toast(e.message, true); }
+});
+
 // ---------------------------------------------------------------- log
 function colorLog(lines) {
   return lines.map(l => {
@@ -770,6 +823,7 @@ function refreshView() {
   if (view === "channels") loadChannels();
   if (view === "schedule") loadSchedule();
   if (view === "failed") loadFailed();
+  if (view === "waiting") loadWaiting();
   if (view === "log") { loadLog(); setTimeout(() => $("#lg-box").scrollTop = 1e9, 200); }
 }
 setInterval(() => {
@@ -781,10 +835,10 @@ setInterval(() => {
 setInterval(tickDial, 1000);
 window.addEventListener("hashchange", () => {
   const v = location.hash.slice(1);
-  if (v !== view && ["dashboard", "channels", "schedule", "failed", "log"].includes(v)) show(v);
+  if (v !== view && ["dashboard", "channels", "waiting", "schedule", "failed", "log"].includes(v)) show(v);
 });
 const start = location.hash.slice(1);
-show(["dashboard", "channels", "schedule", "failed", "log"].includes(start) ? start : "dashboard");
+show(["dashboard", "channels", "waiting", "schedule", "failed", "log"].includes(start) ? start : "dashboard");
 loadChannels();
 </script>
 </body>
