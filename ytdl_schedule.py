@@ -8,16 +8,16 @@ How it learns:
   the history grows over time.
 
 When a channel is due:
-  * Never checked, or not checked for max_gap_hours        -> due (safety net)
-  * Too little history, or it uploads very often           -> every interval_minutes
-  * Otherwise: inside a window that starts a little before one of its usual
-    upload times of day and lasts window_hours            -> every active_minutes
+  * Never checked, or not checked for max_gap_hours (one week) -> due (safety net)
+  * Inside a window that starts a little before one of its usual upload times
+    of day (at any hour) and lasts window_hours              -> every active_minutes
     (if it only ever uploads on certain weekdays, the window only opens on those days)
+  * Otherwise, not due. Channels with too little history, and non-YouTube
+    feeds, have no usual time, so they are only checked by the safety net.
 """
 import datetime as dt
 import json
 import re
-import statistics
 import urllib.request
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
@@ -38,14 +38,12 @@ class Scheduler:
         self.state_file = Path(state_dir) / "schedule.json"
         self.report_file = Path(state_dir) / "schedule_report.txt"
         self.log = log
-        self.interval = float(opts.get("interval_minutes", 120)) * 60
         self.active = float(opts.get("active_minutes", 30)) * 60
         self.window = float(opts.get("window_hours", 3)) * 3600
         self.lead = float(opts.get("lead_minutes", 15)) * 60
-        self.max_gap = float(opts.get("max_gap_hours", 24)) * 3600
+        self.max_gap = float(opts.get("max_gap_hours", 168)) * 3600     # one week
         self.refresh_every = float(opts.get("refresh_hours", 24)) * 3600
         self.min_uploads = int(opts.get("min_uploads", 4))
-        self.busy_gap = float(opts.get("busy_channel_hours", 8)) * 3600
         self.state = self._load()
 
     # ---------- state ----------
@@ -140,9 +138,6 @@ class Scheduler:
         ups = sorted(u for u in ups if u)
         if len(ups) < self.min_uploads:
             return "unknown", [], None
-        gaps = [(b - a).total_seconds() for a, b in zip(ups, ups[1:])]
-        if gaps and statistics.median(gaps) < self.busy_gap:
-            return "busy", [], None
         recent = ups[-30:]
         minutes = sorted({u.hour * 60 + u.minute for u in recent})
         days = {u.weekday() for u in recent}
@@ -170,10 +165,10 @@ class Scheduler:
         if since >= self.max_gap:
             return True, "safety check"
         if not t.get("cid"):
-            return since >= self.interval, "not YouTube"
+            return False, "not YouTube"
         kind, _, _ = self.pattern(name)
-        if kind in ("unknown", "busy"):
-            return since >= self.interval, kind
+        if kind == "unknown":
+            return False, "learning"
         if self.in_window(name, dt.datetime.fromtimestamp(now_ts)):
             return since >= self.active, "upload window"
         return False, "outside window"
@@ -191,9 +186,11 @@ class Scheduler:
             self._task(n)["last_checked"] = now_ts
         self.save()
 
-    def next_due(self, now_ts=None, horizon_hours=24, step_minutes=5):
-        """Earliest time (timestamp) any task becomes due, and how many."""
+    def next_due(self, now_ts=None, horizon_hours=None, step_minutes=5):
+        """Earliest time (timestamp) any task becomes due, and how many.
+        The search covers the safety-net week, so a quiet channel is still found."""
         now_ts = now_ts or time_now()
+        horizon_hours = horizon_hours or self.max_gap / 3600 + 1
         names = list(self.state["tasks"])
         for i in range(1, int(horizon_hours * 60 / step_minutes) + 1):
             ts = now_ts + i * step_minutes * 60
@@ -208,16 +205,15 @@ class Scheduler:
         kind, minutes, weekdays = self.pattern(name)
         t = self._task(name)
         due, reason = self.is_due(name, now_ts)
+        weekly = f"checked at least every {self.max_gap / 86400:g} days"
         if kind == "pattern":
             times = ", ".join(f"{m // 60:02d}:{m % 60:02d}" for m in cluster(minutes))
             days = " ".join(DAYS[d] for d in sorted(weekdays)) if weekdays else "Any day"
             summary = f"{days} · around {times}"
-        elif kind == "busy":
-            summary = f"Uploads very often · every {self.interval / 60:g} min"
         elif not t.get("cid"):
-            summary = f"Not a YouTube feed · every {self.interval / 60:g} min"
+            summary = f"Not a YouTube feed · {weekly}"
         else:
-            summary = f"Learning · every {self.interval / 60:g} min"
+            summary = f"Learning · {weekly}"
         return {"kind": kind, "summary": summary, "uploads": len(t["uploads"]),
                 "last_checked": t.get("last_checked") or None,
                 "last_upload": (t["uploads"] or [None])[-1],
@@ -237,10 +233,8 @@ class Scheduler:
                 times = ", ".join(f"{m // 60:02d}:{m % 60:02d}" for m in cluster(minutes))
                 days = " ".join(DAYS[d] for d in sorted(weekdays)) if weekdays else "any day"
                 desc = f"{days} around {times}"
-            elif kind == "busy":
-                desc = f"uploads very often - checked every {self.interval / 60:g} min"
             else:
-                desc = f"not enough history yet - checked every {self.interval / 60:g} min"
+                desc = f"not enough history yet - checked at least every {self.max_gap / 86400:g} days"
             lines.append(f"{name:<28} {desc}   ({n} uploads seen)")
         try:
             self.report_file.write_text("\n".join(lines) + "\n", encoding="utf-8")

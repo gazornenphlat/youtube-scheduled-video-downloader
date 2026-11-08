@@ -59,16 +59,15 @@ tray:
   # Standalone yt-dlp.exe: ['yt-dlp', '-U']
   # Installed with pip:    ['python', '-m', 'pip', 'install', '-U', 'yt-dlp']
   update_cmd: ['yt-dlp', '-U']
-  interval_minutes: 120                 # how often to check channels with no clear pattern
-  # Smart schedule: learn when each channel uploads and only check it then.
+  interval_minutes: 120                 # only used when smart_schedule is false: check every channel this often
+  # Smart schedule: learn when each channel uploads and only check it around those times.
   # Set to false to check every channel every interval_minutes instead.
   smart_schedule:
     window_hours: 3          # keep checking this long after a usual upload time
     lead_minutes: 15         # start checking this long before it
     active_minutes: 30       # how often to check during that window
-    max_gap_hours: 24        # always check every channel at least this often
+    max_gap_hours: 168       # check every channel at least this often (one week)
     refresh_hours: 24        # how often to re-read channels' upload history
     min_uploads: 4           # uploads needed before a pattern is trusted
-    busy_channel_hours: 8    # channels uploading more often than this use interval_minutes
   log_max_mb: 5
   log_backups: 3

@@ -76,7 +76,6 @@ FLEXGET_CONFIG = Path(_paths.get("flexget_config") or Path.home() / "flexget" / 
 _sched_cfg = _tray.get("smart_schedule", True)
 SMART = _sched_cfg is not False
 SCHED_OPTS = dict(_sched_cfg) if isinstance(_sched_cfg, dict) else {}
-SCHED_OPTS.setdefault("interval_minutes", FLEXGET_INTERVAL)
 TASKS_PER_CALL = 40     # keep the FlexGet command line short
 WEB_OPTS = _cfg.get("web") or {}
 WEB_ENABLED = WEB_OPTS.get("enabled", True) is not False

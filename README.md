@@ -56,9 +56,9 @@ Keep all three files in the same folder.
 ### Smart schedule
 FlexGet doesn't check all channels on every run. ytdl learns when each channel usually uploads, using the publish times in its YouTube RSS feed, and asks FlexGet to check a channel only around those times, via `flexget execute --tasks ...`.
 
-- **Channels with a regular pattern** are checked every 30 minutes, from 15 minutes before one of their usual upload times until 3 hours after. Channels that only upload on certain weekdays are checked only on those days.
-- **Channels that upload very often, or don't have enough history yet,** are checked every `interval_minutes`.
-- **Every channel** is still checked at least once every 24 hours, so an off-schedule upload is never missed for long.
+- **Every channel is checked only around its usual upload times,** whatever time of day that is. It's checked every 30 minutes, from 15 minutes before one of those times until 3 hours after. Channels that only upload on certain weekdays are checked only on those days. A channel that uploads very often has many usual times, so it's checked for most of the day.
+- **Channels that don't have enough history yet,** and non-YouTube feeds, have no usual time, so they're only checked by the safety net below.
+- **Every channel** is checked at least once a week (`max_gap_hours: 168`), so an off-schedule upload is never missed for long.
 - **Run now** checks every channel.
 - **View channel schedule** in the tray menu shows what it has learned for each channel.
 
@@ -172,7 +172,7 @@ Lists that aren't named here use the `defaults:` section, which is MP4 video unl
 | `download.min_date` | Skip videos uploaded before this date (YYYYMMDD) |
 | `download.sleep_min` / `sleep_max` | Random pause between requests, in seconds. Lower is faster but riskier. |
 | `download.max_fails` | Number of failures before a URL is given up on |
-| `tray.interval_minutes` | Minimum time between FlexGet runs |
+| `tray.interval_minutes` | Time between FlexGet runs when `smart_schedule` is off |
 | `tray.update_cmd` | How yt-dlp gets updated. Use the pip line if you installed it with pip. |
 
 In Windows paths, use **single quotes** so the backslashes are read correctly.
