@@ -4,6 +4,7 @@ Channel Manager - add, edit and delete YouTube channels in the FlexGet config.
 Tabs:
   Add channel - paste a channel link, look up its ID, confirm, pick a list, save
   Channels    - every channel in the FlexGet config, A-Z, with edit / delete
+  Waiting     - URLs in the lists that haven't downloaded yet; tick and delete
 
 The FlexGet file is edited as text, so formatting, order and comments are kept.
 A timestamped backup is saved before every change (last 20 kept).
@@ -31,7 +32,8 @@ try:
     from flexget_channels import *          # noqa: F401,F403  shared logic
     from flexget_channels import (Channel, FlexgetConfig, CHANNEL_ID_RE, UA,
                                   load_settings, lookup_channel, suggest_task_name,
-                                  validate, touch_list, HERE)
+                                  validate, touch_list, HERE,
+                                  read_waiting, remove_waiting)
 except ImportError as _e:
     _msg = (f"Missing library: {_e.name}\n\n" +
             ("tkinter comes with Python. Re-run the Python installer, choose Modify, "
@@ -151,10 +153,15 @@ class App(tk.Tk):
         nb.pack(fill="both", expand=True, padx=8, pady=8)
         self.add_tab = ttk.Frame(nb, padding=12)
         self.list_tab = ttk.Frame(nb, padding=12)
+        self.wait_tab = ttk.Frame(nb, padding=12)
         nb.add(self.add_tab, text="  Add channel  ")
         nb.add(self.list_tab, text="  Channels  ")
+        nb.add(self.wait_tab, text="  Waiting  ")
         self.build_add_tab()
         self.build_list_tab()
+        self.build_wait_tab()
+        nb.bind("<<NotebookTabChanged>>",
+                lambda _: self.refresh_waiting() if nb.select() == str(self.wait_tab) else None)
 
         self.status = tk.StringVar(value=f"FlexGet config: {self.cfg.path}")
         ttk.Label(self, textvariable=self.status, anchor="w",
@@ -473,6 +480,108 @@ class App(tk.Tk):
                 messagebox.showinfo("Edit", "Select a single channel to edit.")
             return
         EditDialog(self, sel[0])
+
+
+    # ------------------------------------------------------------------
+    #  Waiting tab
+    # ------------------------------------------------------------------
+    CHECK_ON, CHECK_OFF = "\u2611", "\u2610"     # ☑ ☐
+
+    def build_wait_tab(self):
+        f = self.wait_tab
+        top = ttk.Frame(f)
+        top.pack(fill="x")
+        ttk.Label(top, text="URLs waiting to download. Click a row to tick it, "
+                            "then press Delete selected.").pack(side="left")
+        self.wait_count = ttk.Label(top, style="Muted.TLabel")
+        self.wait_count.pack(side="right")
+
+        mid = ttk.Frame(f)
+        mid.pack(fill="both", expand=True, pady=8)
+        self.wait_tree = ttk.Treeview(mid, columns=("check", "list", "url", "format"),
+                                      show="headings", selectmode="none")
+        for c, label, w, stretch in (("check", "", 40, False), ("list", "List", 130, False),
+                                     ("url", "Video link", 420, True),
+                                     ("format", "Format", 70, False)):
+            self.wait_tree.heading(c, text=label)
+            self.wait_tree.column(c, width=w, anchor="center" if c == "check" else "w",
+                                  stretch=stretch)
+        sb = ttk.Scrollbar(mid, orient="vertical", command=self.wait_tree.yview)
+        self.wait_tree.configure(yscrollcommand=sb.set)
+        self.wait_tree.pack(side="left", fill="both", expand=True)
+        sb.pack(side="right", fill="y")
+        self.wait_tree.bind("<Button-1>", self.wait_click)
+
+        btns = ttk.Frame(f)
+        btns.pack(fill="x")
+        ttk.Button(btns, text="Delete selected", command=self.do_wait_delete).pack(side="left")
+        ttk.Button(btns, text="Tick all", command=lambda: self.wait_tick_all(True)).pack(
+            side="left", padx=6)
+        ttk.Button(btns, text="Clear ticks", command=lambda: self.wait_tick_all(False)).pack(
+            side="left")
+        ttk.Button(btns, text="Reload", command=self.refresh_waiting).pack(side="right")
+
+        self.wait_items = {}      # key -> (list_path, url, format)
+        self.wait_checked = set() # keys that are ticked
+
+    def refresh_waiting(self):
+        self.wait_tree.delete(*self.wait_tree.get_children())
+        self.wait_items.clear()
+        self.wait_checked.clear()
+        # Row ids are plain numbers; the path and URL live in wait_items.
+        for i, (path, url, fmt) in enumerate(read_waiting(self.cfg.lists_dir)):
+            key = str(i)
+            self.wait_items[key] = (path, url, fmt)
+            self.wait_tree.insert("", "end", iid=key, values=(
+                self.CHECK_OFF, Path(path).stem, url, fmt.upper() if fmt else "List default"))
+        n = len(self.wait_items)
+        self.wait_count.config(text=f"{n} waiting")
+
+    def wait_click(self, event):
+        if self.wait_tree.identify_region(event.x, event.y) not in ("cell", "tree"):
+            return None
+        key = self.wait_tree.identify_row(event.y)
+        if not key:
+            return None
+        self.wait_set_tick(key, key not in self.wait_checked)
+        return "break"
+
+    def wait_set_tick(self, key, on):
+        if on:
+            self.wait_checked.add(key)
+        else:
+            self.wait_checked.discard(key)
+        self.wait_tree.set(key, "check", self.CHECK_ON if on else self.CHECK_OFF)
+
+    def wait_tick_all(self, on):
+        for key in self.wait_items:
+            self.wait_set_tick(key, on)
+
+    def do_wait_delete(self):
+        keys = sorted(self.wait_checked, key=int)
+        if not keys:
+            messagebox.showinfo("Delete", "Tick the links you want to remove first.")
+            return
+        lines = []
+        for k in keys[:15]:
+            _, url, _ = self.wait_items[k]
+            lines.append(f"  \u2022  {url}   ({Path(self.wait_items[k][0]).stem})")
+        more = f"\n  ...and {len(keys) - 15} more" if len(keys) > 15 else ""
+        if not messagebox.askyesno(
+                "Delete waiting links",
+                f"Remove {len(keys)} link(s) from the download lists?\n\n"
+                + "\n".join(lines) + more + "\n\n"
+                "These will NOT be downloaded. Videos already downloaded are not affected."):
+            return
+        pairs = [(self.wait_items[k][0], self.wait_items[k][1]) for k in keys]
+        try:
+            removed = remove_waiting(pairs)
+        except OSError as e:
+            messagebox.showerror("Couldn't save", str(e))
+            self.refresh_waiting()
+            return
+        self.status.set(f"Removed {removed} line(s) from the lists")
+        self.refresh_waiting()
 
 
 class EditDialog(tk.Toplevel):

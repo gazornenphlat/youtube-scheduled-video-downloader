@@ -368,3 +368,59 @@ def touch_list(lists_dir: Path, name):
         pass
 
 
+
+
+# ----------------------------------------------------------------------
+#  Waiting list: URLs in lists/*.txt that ytdl hasn't downloaded yet
+# ----------------------------------------------------------------------
+def read_waiting(lists_dir: Path):
+    """Returns [(list_path, url, format_or_'')], one row per URL per list.
+    A line is 'URL' or 'URL wav'; lines starting with # or ; are ignored."""
+    items = []
+    if not lists_dir.is_dir():
+        return items
+    for f in sorted(lists_dir.glob("*.txt"), key=lambda p: p.name.lower()):
+        try:
+            lines = f.read_text(encoding="utf-8", errors="ignore").splitlines()
+        except OSError:
+            continue
+        seen = set()
+        for line in lines:
+            parts = line.split()
+            if not parts or parts[0].startswith(("#", ";")):
+                continue
+            url = parts[0]
+            if url in seen:
+                continue
+            seen.add(url)
+            fmt = parts[1].lower() if len(parts) > 1 else ""
+            items.append((f, url, fmt))
+    return items
+
+
+def remove_waiting(pairs):
+    """Remove the given (list_path, url) URLs from their list files.
+    Every line for that URL in the file is removed. Each file is rewritten
+    atomically (tmp file + replace). Returns the number of lines removed."""
+    by_file = {}
+    for path, url in pairs:
+        by_file.setdefault(Path(path), set()).add(url)
+    removed = 0
+    for path, urls in by_file.items():
+        try:
+            lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+        except OSError:
+            continue
+        kept = []
+        for line in lines:
+            parts = line.split()
+            if parts and not parts[0].startswith(("#", ";")) and parts[0] in urls:
+                removed += 1
+                continue
+            kept.append(line)
+        if len(kept) == len(lines):
+            continue
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text("\n".join(kept) + ("\n" if kept else ""), encoding="utf-8")
+        os.replace(tmp, path)
+    return removed

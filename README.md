@@ -136,6 +136,15 @@ First, set `paths: flexget_config` in `config.yaml` to your FlexGet `config.yml`
 - To delete, select one or more channels and click **Delete** or press the Delete key.
 - Channels shown in orange need attention. That covers duplicates and lists saved outside the lists folder, which ytdl won't download.
 
+**Waiting tab**
+
+Shows every URL in your download lists that hasn't been downloaded yet, with its list and format.
+1. Click a row (or its box) to tick it. Click again to untick.
+2. **Tick all** and **Clear ticks** work on the whole list.
+3. Press **Delete selected**. The ticked links are removed from their list files, so ytdl won't download them.
+
+Deleting only removes the links from the lists. Videos already downloaded are not affected. A deleted link is also not brought back by FlexGet, because FlexGet remembers the videos it has already seen. If a download run is in progress, a link that is already being downloaded may still finish, so pause first from the tray menu if you're not sure.
+
 The FlexGet file is edited as text, so its formatting and order are kept. A backup is saved to `config_backups\` next to it before every change, and the last 20 are kept.
 
 ## Configuration
