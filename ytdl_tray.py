@@ -462,6 +462,8 @@ def main():
     r = Runner()
     # Used by the web UI's "Test a link" button (same cookies and Node as downloads)
     r.link_opts = {"cookies": _paths.get("cookies"), "node": _paths.get("node")}
+    # Used by the web UI's Settings page to edit config.yaml
+    r.config_file = CONFIG_FILE
     if WEB_ENABLED:
         import web_server
         srv, msg = web_server.start(r, WEB_OPTS, STATE_DIR, LISTS_DIR, LOGFILE, log)

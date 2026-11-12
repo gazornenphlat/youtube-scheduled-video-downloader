@@ -232,6 +232,7 @@
   <button class="nav-btn" data-view="waiting">Waiting <span class="count" id="nc-waiting">–</span></button>
   <button class="nav-btn" data-view="schedule">Schedule</button>
   <button class="nav-btn" data-view="failed">Failed <span class="count" id="nc-failed">–</span></button>
+  <button class="nav-btn" data-view="settings">Settings</button>
   <button class="nav-btn" data-view="log">Log</button>
   <div class="nav-foot" id="foot">Connecting…</div>
 </nav>
@@ -347,6 +348,17 @@
       <input class="input" id="lg-filter" placeholder="Filter…" style="max-width:240px">
     </div>
     <div class="card"><div class="well logbox tall" id="lg-box">…</div></div>
+  </section>
+  <section class="view" id="v-settings">
+    <h1>Settings</h1>
+    <p class="sub">The main settings from config.yaml. Comments and layout in that file are kept. Changes take effect after you restart the tray app.</p>
+    <div id="st-groups"></div>
+    <div class="toolbar" style="margin-top:1.5rem">
+      <button class="btn" id="st-reload">Undo changes</button>
+      <div class="grow"></div>
+      <button class="btn primary" id="st-save">Save settings</button>
+    </div>
+    <p class="sub" id="st-msg" style="margin-top:1rem"></p>
   </section>
 </main>
 
@@ -845,6 +857,72 @@ async function loadLog() {
 $("#lg-lines").addEventListener("change", loadLog);
 $("#lg-filter").addEventListener("input", loadLog);
 
+// ---------------------------------------------------------------- settings
+let settingsData = [];
+function renderSettings(groups) {
+  settingsData = groups;
+  const box = $("#st-groups"); box.innerHTML = "";
+  groups.forEach(g => {
+    const card = document.createElement("div"); card.className = "card";
+    card.style.cssText = "padding:1.25rem 1.5rem;margin-bottom:1.25rem";
+    card.innerHTML = `<h2 style="margin:0 0 1rem;font-size:1.15rem">${esc(g.title)}</h2>`;
+    g.items.forEach(it => {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;gap:1rem;align-items:center;flex-wrap:wrap;padding:.6rem 0";
+      const text = `<div style="flex:1 1 260px"><div style="font-weight:600">${esc(it.label)}</div>`
+        + (it.help ? `<div class="sub" style="font-size:.85rem">${esc(it.help)}</div>` : "") + `</div>`;
+      let control;
+      if (it.type === "bool") {
+        control = `<label class="toggle"><input type="checkbox" data-path="${esc(it.path)}" ${it.value ? "checked" : ""}>`
+          + `<span class="track"></span><span>${it.value ? "On" : "Off"}</span></label>`;
+      } else {
+        const inputType = (it.type === "int" || it.type === "float") ? "number" : "text";
+        const extra = (it.min != null ? ` min="${it.min}"` : "") + (it.max != null ? ` max="${it.max}"` : "")
+          + (it.type === "float" ? ` step="0.5"` : "");
+        control = `<input class="input" style="width:200px" type="${inputType}" data-path="${esc(it.path)}"`
+          + ` data-type="${esc(it.type)}" value="${esc(it.value)}"${extra}>`;
+      }
+      row.innerHTML = text + `<div>${control}</div>`;
+      card.appendChild(row);
+    });
+    box.appendChild(card);
+  });
+  // Turn the on/off labels into live text
+  box.querySelectorAll("input[type=checkbox]").forEach(cb => cb.addEventListener("change", () => {
+    cb.parentElement.querySelector("span:last-child").textContent = cb.checked ? "On" : "Off";
+  }));
+}
+async function loadSettings(force) {
+  if (!force && document.activeElement && $("#v-settings").contains(document.activeElement)) return;
+  try {
+    const d = await api("/api/settings");
+    renderSettings(d.groups);
+    $("#st-msg").textContent = "";
+  } catch (e) { $("#st-msg").textContent = "Couldn't load settings: " + e.message; }
+}
+function collectSettings() {
+  const out = {};
+  $("#st-groups").querySelectorAll("[data-path]").forEach(el => {
+    out[el.dataset.path] = el.type === "checkbox" ? el.checked : el.value;
+  });
+  return out;
+}
+$("#st-save").addEventListener("click", async () => {
+  const btn = $("#st-save"); btn.disabled = true;
+  try {
+    const d = await api("/api/settings", "POST", { values: collectSettings() });
+    const n = d.saved.length;
+    await loadSettings(true);                // reload first, so the message below is kept
+    $("#st-msg").textContent = n ? `Saved ${n} setting${n === 1 ? "" : "s"}. Restart the tray app to apply them.`
+                                 : "Nothing changed.";
+    toast("Settings saved");
+  } catch (e) {
+    $("#st-msg").textContent = e.message;
+    toast(e.message, true);
+  } finally { btn.disabled = false; }
+});
+$("#st-reload").addEventListener("click", () => loadSettings(true));
+
 // ---------------------------------------------------------------- refresh loop
 function refreshView() {
   loadStatus();
@@ -853,6 +931,7 @@ function refreshView() {
   if (view === "schedule") loadSchedule();
   if (view === "failed") loadFailed();
   if (view === "waiting") loadWaiting();
+  if (view === "settings") loadSettings();
   if (view === "log") { loadLog(); setTimeout(() => $("#lg-box").scrollTop = 1e9, 200); }
 }
 setInterval(() => {

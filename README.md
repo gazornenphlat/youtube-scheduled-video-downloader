@@ -111,6 +111,7 @@ The tray app also serves a web interface at **http://localhost:8765**. To open i
 | Waiting | Every video waiting to download, shown by title, with its list and format. Tick videos and **Delete selected** to remove them from the lists so they aren't downloaded |
 | Schedule | What the smart schedule learned for each channel, and which channels are in an upload window right now |
 | Failed | Retry videos that kept failing, which puts them back in their list, or remove them |
+| Settings | The main settings from `config.yaml` (downloads at once, free-space limit, H.264, quiet hours, check times). Save writes only the changed lines, so your comments stay. A backup of the old file goes in `config_backups\`, and the last 20 are kept. Restart the tray app to apply changes |
 | Log | The live log, with a filter |
 
 By default it's only reachable from this PC. To use it from your phone or another computer on your network, set `host: 0.0.0.0` in the config, then open `http://<this PC's name or IP>:8765`. No password is needed. If you want one, set `password:`; the browser will then ask for it, and any username works. Windows Firewall may ask whether to allow Python on private networks the first time. To turn the web interface off completely, set `enabled: false`.

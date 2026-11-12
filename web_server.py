@@ -25,6 +25,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 import flexget_channels as fc
+import config_edit as ce
 
 HERE = Path(__file__).resolve().parent
 WEB_DIR = HERE / "web"
@@ -52,6 +53,22 @@ class WebApp:
     def cfg(self):
         path, lists_dir = fc.load_settings()
         return fc.FlexgetConfig(path, lists_dir)
+
+    # ---------- settings (config.yaml) ----------
+    def settings_path(self):
+        path = getattr(self.runner, "config_file", None)
+        if not path:
+            raise RuntimeError("The settings file is not known to the tray app.")
+        return Path(path)
+
+    def get_settings(self):
+        return {"groups": ce.describe(self.settings_path())}
+
+    def save_settings(self, body):
+        changes = body.get("values") or {}
+        with self.lock:
+            saved = ce.save(self.settings_path(), changes)
+        return {"ok": True, "saved": saved}
 
     def read_json(self, name):
         try:
@@ -387,6 +404,8 @@ def make_handler(app: WebApp, host: str, port: int, password: str):
                         return self.send_json({"rows": app.failed_rows()})
                     if path == "/api/waiting":
                         return self.send_json(app.waiting_rows())
+                    if path == "/api/settings":
+                        return self.send_json(app.get_settings())
                     if path == "/api/log":
                         n = int((q.get("lines") or ["300"])[0])
                         return self.send_json(app.log_tail(min(max(n, 10), 3000)))
@@ -413,6 +432,8 @@ def make_handler(app: WebApp, host: str, port: int, password: str):
                         return self.send_json(app.remove_waiting(b))
                     if path == "/api/test-link":
                         return self.send_json(app.test_link(b))
+                    if path == "/api/settings":
+                        return self.send_json(app.save_settings(b))
                 elif method == "PUT":
                     m = re.fullmatch(r"/api/channels/(.+)", path)
                     if m:
