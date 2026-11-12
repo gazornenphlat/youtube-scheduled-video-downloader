@@ -16,6 +16,7 @@ import hmac
 import json
 import os
 import re
+import subprocess
 import threading
 import time
 import traceback
@@ -254,6 +255,37 @@ class WebApp:
                 if not self.title_queue:
                     fc.save_titles(self.titles_file, self.titles)
 
+    def test_link(self, body):
+        """Check one link with yt-dlp (no download): returns the title or the reason it failed."""
+        url = str(body.get("url") or "").strip()
+        if not url.startswith(("http://", "https://")):
+            return {"ok": False, "error": "Paste a full YouTube link (starting with https://)."}
+        opts = getattr(self.runner, "link_opts", {}) or {}
+        cmd = ["yt-dlp", "--simulate", "--no-warnings", "--no-playlist",
+               "--print", "%(title)s", url]
+        cookies = opts.get("cookies")
+        if cookies and Path(cookies).exists():
+            cmd[1:1] = ["--cookies", str(cookies)]
+        if opts.get("node"):
+            cmd[1:1] = ["--js-runtimes", f"node:{opts['node']}"]
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8",
+                                 errors="replace", timeout=90)
+        except FileNotFoundError:
+            return {"ok": False, "error": "yt-dlp isn't installed or isn't on the PATH."}
+        except subprocess.TimeoutExpired:
+            return {"ok": False, "error": "YouTube didn't answer in time. Try again."}
+        if res.returncode == 0 and res.stdout.strip():
+            return {"ok": True, "title": res.stdout.strip().splitlines()[-1]}
+        err = (res.stderr or res.stdout or "").strip()
+        low = err.lower()
+        if any(p in low for p in ("sign in to confirm", "cookies are no longer valid",
+                                  "confirm you're not a bot", "confirm you’re not a bot")):
+            return {"ok": False, "cookies": True,
+                    "error": "YouTube wants you to sign in. Export a fresh cookies.txt."}
+        last = err.splitlines()[-1] if err else "yt-dlp reported an error."
+        return {"ok": False, "error": last.replace("ERROR: ", "")}
+
     def remove_waiting(self, body):
         # Only lists that exist in the lists folder are accepted (no path tricks).
         names = {f.stem: f for f in self.lists_dir.glob("*.txt")} if self.lists_dir.is_dir() else {}
@@ -379,6 +411,8 @@ def make_handler(app: WebApp, host: str, port: int, password: str):
                         return self.send_json(app.remove_failed(b))
                     if path == "/api/waiting/remove":
                         return self.send_json(app.remove_waiting(b))
+                    if path == "/api/test-link":
+                        return self.send_json(app.test_link(b))
                 elif method == "PUT":
                     m = re.fullmatch(r"/api/channels/(.+)", path)
                     if m:

@@ -67,6 +67,12 @@ Upload history is refreshed daily and builds up over time. New channels added wi
 ### Live streams
 Live, scheduled and just-ended streams are skipped and left in their list. They download on a later run, once YouTube has turned them into normal videos. Without this, ffmpeg would record a live stream in real time until it ended. To turn it off, set `skip_live: false`, either globally or per list.
 
+### Low disk space
+Before each download, ytdl checks the free space on the drive it saves to. If it's below `download.min_free_gb` (5 GB by default), downloads stop, the rest of the run is skipped and you get a notification. Free up space and run again. URLs stay in their lists, so nothing is lost.
+
+### Quiet hours
+Set `tray: quiet_hours: '23:00-07:00'` to stop all checks and downloads during that time. The tray shows when it resumes. **Run now** still works during quiet hours.
+
 ### Expired cookies
 If YouTube asks you to sign in or confirm you're not a bot:
 1. Downloads stop.
@@ -100,7 +106,7 @@ The tray app also serves a web interface at **http://localhost:8765**. To open i
 
 | Page | What you can do |
 |---|---|
-| Dashboard | A dial counting down to the next check, the current status, **Run now**, a pause switch, the number of URLs waiting in each list, last-run results and recent activity |
+| Dashboard | A dial counting down to the next check, the current status, **Run now**, a pause switch, the number of URLs waiting in each list, last-run results and recent activity, and **Test a link**: paste a YouTube link to check it can be read (cookies and all) without downloading it |
 | Channels | Search, filter by list, look up and add channels (with a WAV option), edit or delete one or several, and open a channel on YouTube |
 | Waiting | Every video waiting to download, shown by title, with its list and format. Tick videos and **Delete selected** to remove them from the lists so they aren't downloaded |
 | Schedule | What the smart schedule learned for each channel, and which channels are in an upload window right now |
@@ -172,6 +178,11 @@ Lists that aren't named here use the `defaults:` section, which is MP4 video unl
 | `download.min_date` | Skip videos uploaded before this date (YYYYMMDD) |
 | `download.sleep_min` / `sleep_max` | Random pause between requests, in seconds. Lower is faster but riskier. |
 | `download.max_fails` | Number of failures before a URL is given up on |
+| `download.min_free_gb` | Stop downloading when the output drive has less than this many GB free. `0` turns the check off |
+| `download.date_in_filename` | Put the upload date first in filenames (`20260101 - Channel - Title.mp4`) |
+| `download.separate_archives` | Keep audio and video "already downloaded" records apart, so a video you already have can still be downloaded as WAV |
+| `download.prefer_h264` | Prefer H.264 video (plays on more devices) |
+| `tray.quiet_hours` | A time range with no checks or downloads, e.g. `'23:00-07:00'` |
 | `tray.interval_minutes` | Time between FlexGet runs when `smart_schedule` is off |
 | `tray.update_cmd` | How yt-dlp gets updated. Use the pip line if you installed it with pip. |
 

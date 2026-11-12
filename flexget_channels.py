@@ -16,6 +16,8 @@ import subprocess
 import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
+
+import listlock
 from urllib.parse import quote
 
 import yaml
@@ -442,27 +444,29 @@ def fetch_title(url, timeout=10):
 
 def remove_waiting(pairs):
     """Remove the given (list_path, url) URLs from their list files.
-    Every line for that URL in the file is removed. Each file is rewritten
-    atomically (tmp file + replace). Returns the number of lines removed."""
+    Every line for that URL in the file is removed. Each file is locked (so
+    the downloader can't overwrite the change) and rewritten atomically.
+    Returns the number of lines removed."""
     by_file = {}
     for path, url in pairs:
         by_file.setdefault(Path(path), set()).add(url)
     removed = 0
     for path, urls in by_file.items():
-        try:
-            lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
-        except OSError:
-            continue
-        kept = []
-        for line in lines:
-            parts = line.split()
-            if parts and not parts[0].startswith(("#", ";")) and parts[0] in urls:
-                removed += 1
+        with listlock.list_lock(path):
+            try:
+                lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+            except OSError:
                 continue
-            kept.append(line)
-        if len(kept) == len(lines):
-            continue
-        tmp = path.with_suffix(path.suffix + ".tmp")
-        tmp.write_text("\n".join(kept) + ("\n" if kept else ""), encoding="utf-8")
-        os.replace(tmp, path)
+            kept = []
+            for line in lines:
+                parts = line.split()
+                if parts and not parts[0].startswith(("#", ";")) and parts[0] in urls:
+                    removed += 1
+                    continue
+                kept.append(line)
+            if len(kept) == len(lines):
+                continue
+            tmp = path.with_suffix(path.suffix + ".tmp")
+            tmp.write_text("\n".join(kept) + ("\n" if kept else ""), encoding="utf-8")
+            os.replace(tmp, path)
     return removed

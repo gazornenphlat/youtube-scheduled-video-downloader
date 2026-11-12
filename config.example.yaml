@@ -32,6 +32,11 @@ download:
   keep_urls: false        # true = never remove finished URLs from lists
   skip_live: true         # skip live/upcoming streams, retry after they end
   filename: '%(channel)s - %(title)s.%(ext)s'
+  date_in_filename: false # true = put the upload date first: '20260101 - Channel - Title.mp4'
+                          #   (only used when filename is not set above)
+  min_free_gb: 5          # stop downloading when the output drive has less than this free (0 = don't check)
+  separate_archives: false # true = keep audio and video "already downloaded" records apart
+  prefer_h264: false      # true = prefer H.264 video (plays on more devices, sometimes larger files)
 
 # Settings used for any list not named under "lists" below
 defaults:
@@ -62,6 +67,8 @@ tray:
   interval_minutes: 120                 # only used when smart_schedule is false: check every channel this often
   # Smart schedule: learn when each channel uploads and only check it around those times.
   # Set to false to check every channel every interval_minutes instead.
+  quiet_hours: ''         # e.g. '23:00-07:00' - no checks or downloads in this time ('' = off).
+                          #   'Run now' still works during quiet hours.
   smart_schedule:
     window_hours: 3          # keep checking this long after a usual upload time
     lead_minutes: 15         # start checking this long before it

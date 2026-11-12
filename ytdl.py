@@ -14,6 +14,7 @@ import argparse
 import datetime as dt
 import json
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -24,6 +25,8 @@ try:
     import yaml
 except ImportError:
     sys.exit("Missing library: run  pip install pyyaml")
+
+import listlock
 
 HERE = Path(__file__).resolve().parent
 DEFAULT_CONFIG = HERE / "config.yaml"
@@ -59,6 +62,7 @@ print_lock = threading.Lock()
 list_lock = threading.Lock()
 state_lock = threading.Lock()
 cookies_bad = threading.Event()
+space_low = threading.Event()     # set when the download drive is nearly full
 
 
 # ---------- config ----------
@@ -81,15 +85,29 @@ class Config:
         self.max_fails = int(d.get("max_fails", 3))
         self.keep_urls = bool(d.get("keep_urls", False))
         self.skip_live = bool(d.get("skip_live", True))
-        self.filename = d.get("filename", "%(channel)s - %(title)s.%(ext)s")
+        self.date_in_filename = bool(d.get("date_in_filename", False))
+        default_name = ("%(upload_date)s - %(channel)s - %(title)s.%(ext)s"
+                        if self.date_in_filename else "%(channel)s - %(title)s.%(ext)s")
+        self.filename = d.get("filename", default_name)
+        self.min_free_gb = float(d.get("min_free_gb", 5))          # 0 = don't check
+        self.separate_archives = bool(d.get("separate_archives", False))
+        self.prefer_h264 = bool(d.get("prefer_h264", False))
 
         self.defaults = raw.get("defaults") or {}
         self.lists = {str(k).lower(): (v or {}) for k, v in (raw.get("lists") or {}).items()}
 
         self.archive = self.state_dir / "downloaded.txt"
+        self.audio_archive = self.state_dir / "downloaded_audio.txt"
         self.fails_file = self.state_dir / "failures.json"
         self.failed_list = self.state_dir / "failed.txt"
         self.summary_file = self.state_dir / "last_run.json"
+
+    def archive_for(self, fmt: str) -> Path:
+        """Which 'already downloaded' record to use. Optionally audio and video
+        are kept apart, so a video you already have can still be fetched as WAV."""
+        if self.separate_archives and fmt != "video":
+            return self.audio_archive
+        return self.archive
 
     def for_list(self, name: str) -> dict:
         """Merged settings for one list: defaults <- per-list."""
@@ -147,7 +165,8 @@ def atomic_write_text(path: Path, text: str, encoding: str = "utf-8"):
 
 
 def remove_from_list(listfile: Path, url: str):
-    with list_lock:
+    # list_lock: threads in this process. list_lock(): other programs (web UI, Channel Manager)
+    with list_lock, listlock.list_lock(listfile):
         lines = listfile.read_text(encoding="utf-8", errors="ignore").splitlines()
         kept = [l for l in lines if (l.split() or [""])[0] != url]
         atomic_write_text(listfile, "\n".join(kept) + ("\n" if kept else ""), encoding="utf-8")
@@ -182,17 +201,26 @@ def record_result(listfile: Path, url: str, ok: bool) -> bool:
     return gave_up
 
 
+def free_gb(path: Path) -> float:
+    try:
+        return shutil.disk_usage(path).free / 1e9
+    except OSError:
+        return float("inf")       # can't tell - don't block downloads
+
+
 def build_cmd(url, s: dict, args):
     cmd = ["yt-dlp", url]
     if s["format"] == "video":
         cmd += ["-f", "bestvideo+bestaudio/best",
                 "--remux-video", "mp4", "--merge-output-format", "mp4"]
+        if CFG.prefer_h264:
+            cmd += ["-S", "vcodec:h264"]      # prefer H.264 among the best formats
     else:
         cmd += ["-f", "bestaudio/best", "-x", "--audio-format", s["format"],
                 "--audio-quality", "0"]
     cmd += [
         "-o", str(s["output"] / s["filename"]),
-        "--download-archive", str(CFG.archive),
+        "--download-archive", str(CFG.archive_for(s["format"])),
         "--no-overwrites", "--continue",
         "--concurrent-fragments", str(CFG.fragments),
         "--extractor-retries", "5", "--retry-sleep", "extractor:3",
@@ -217,7 +245,12 @@ def build_cmd(url, s: dict, args):
 def run_job(listfile: Path, url, s: dict, args):
     """Returns one of: ok, failed, gave_up, cookies, skipped."""
     tag = f"{listfile.stem} | {url[-30:]}"
-    if cookies_bad.is_set():
+    if cookies_bad.is_set() or space_low.is_set():
+        return "skipped"
+    if CFG.min_free_gb > 0 and free_gb(s["output"]) < CFG.min_free_gb:
+        space_low.set()
+        log(tag, f"Not enough free space on {s['output']} "
+                 f"(need {CFG.min_free_gb:g} GB) - stopping downloads")
         return "skipped"
 
     log(tag, f"starting ({s['format']})")
@@ -274,6 +307,7 @@ def run_job(listfile: Path, url, s: dict, args):
 def write_summary(counts, gave_up_urls):
     data = dict(counts, gave_up_urls=gave_up_urls,
                 cookies_expired=cookies_bad.is_set(),
+                low_space=space_low.is_set(),
                 finished=f"{dt.datetime.now():%Y-%m-%d %H:%M:%S}")
     try:
         atomic_write_text(CFG.summary_file, json.dumps(data, indent=1), encoding="utf-8")
@@ -353,6 +387,8 @@ def main():
           f"{counts['skipped']} skipped.")
     if cookies_bad.is_set():
         print("COOKIES EXPIRED - export a fresh cookies.txt and run again.")
+    if space_low.is_set():
+        print("LOW DISK SPACE - free up space, then run again. Remaining downloads were skipped.")
     print("=" * 42)
 
     if cookies_bad.is_set():

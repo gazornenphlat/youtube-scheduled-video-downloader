@@ -21,6 +21,7 @@ import datetime as dt
 import json
 import logging
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -76,6 +77,30 @@ FLEXGET_CONFIG = Path(_paths.get("flexget_config") or Path.home() / "flexget" / 
 _sched_cfg = _tray.get("smart_schedule", True)
 SMART = _sched_cfg is not False
 SCHED_OPTS = dict(_sched_cfg) if isinstance(_sched_cfg, dict) else {}
+QUIET_RANGE = None   # (start, end) in minutes since midnight, or None
+def parse_quiet(spec):
+    """'23:00-07:00' -> (1380, 420). Returns None if off or not understood."""
+    m = re.fullmatch(r"\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*", str(spec or ""))
+    if not m:
+        if str(spec or "").strip():
+            log(f"quiet_hours '{spec}' not understood - use HH:MM-HH:MM (ignored)")
+        return None
+    return int(m[1]) * 60 + int(m[2]), int(m[3]) * 60 + int(m[4])
+
+
+def quiet_until(now, rng):
+    """If 'now' is inside the quiet window, returns when it ends; otherwise None."""
+    start, end = rng
+    cur = now.hour * 60 + now.minute
+    inside = (start <= cur < end) if start < end else (cur >= start or cur < end)
+    if not inside:
+        return None
+    until = now.replace(hour=end // 60, minute=end % 60, second=0, microsecond=0)
+    if until <= now:
+        until += dt.timedelta(days=1)
+    return until
+
+
 TASKS_PER_CALL = 40     # keep the FlexGet command line short
 WEB_OPTS = _cfg.get("web") or {}
 WEB_ENABLED = WEB_OPTS.get("enabled", True) is not False
@@ -97,6 +122,7 @@ except Exception as e:
 _h.setFormatter(logging.Formatter("%(asctime)s  %(message)s", "%Y-%m-%d %H:%M:%S"))
 logger.addHandler(_h)
 log = logger.info
+QUIET_RANGE = parse_quiet(_tray.get("quiet_hours", ""))   # needs the logger
 
 
 # ---------- single instance ----------
@@ -270,6 +296,9 @@ class Runner:
             self.notify("Export a fresh cookies.txt, then right-click the tray icon "
                         "and choose Resume.", "YouTube cookies expired")
             return
+        if s.get("low_space"):
+            self.notify("Free up space on the download drive, then run again.",
+                        "Downloads stopped: low disk space")
         ok, failed, gave_up = s.get("ok", 0), s.get("failed", 0), s.get("gave_up", 0)
         if ok or failed or gave_up:
             parts = [f"{ok} downloaded"]
@@ -286,6 +315,16 @@ class Runner:
                 time.sleep(1)
             if self.stopping.is_set():
                 break
+
+            # Quiet hours: no checks or downloads until the window ends.
+            # "Run now" still goes ahead (force_all is set).
+            until = None if self.force_all or not QUIET_RANGE else \
+                quiet_until(dt.datetime.now(), QUIET_RANGE)
+            if until:
+                self.set_status(f"Quiet hours - resumes {until:%H:%M}", "idle")
+                self.wake.clear()
+                self.wake.wait(timeout=min(300, max(1, (until - dt.datetime.now()).total_seconds())))
+                continue
 
             self.maybe_update_ytdlp()
             if self.stopping.is_set():
@@ -421,6 +460,8 @@ def main():
     log("=" * 40)
     log("Tray app started")
     r = Runner()
+    # Used by the web UI's "Test a link" button (same cookies and Node as downloads)
+    r.link_opts = {"cookies": _paths.get("cookies"), "node": _paths.get("node")}
     if WEB_ENABLED:
         import web_server
         srv, msg = web_server.start(r, WEB_OPTS, STATE_DIR, LISTS_DIR, LOGFILE, log)

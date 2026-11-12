@@ -241,6 +241,15 @@
   <section class="view active" id="v-dashboard">
     <h1>Dashboard</h1>
     <p class="sub" id="dash-sub">&nbsp;</p>
+    <div class="card" style="margin-bottom:1.5rem">
+      <strong>Test a link</strong>
+      <p class="muted small" style="margin:.25rem 0 .75rem">Checks that a YouTube link can be read, without downloading it.</p>
+      <div class="toolbar">
+        <input class="input" id="tl-url" placeholder="https://www.youtube.com/watch?v=…" style="flex:1;min-width:200px">
+        <button class="btn" id="tl-go">Test</button>
+      </div>
+      <div class="small" id="tl-result" style="margin-top:.75rem"></div>
+    </div>
     <div class="grid dash">
       <div class="card dial-card">
         <div class="dial" id="dial">
@@ -757,6 +766,20 @@ $("#fa-remove").addEventListener("click", async () => {
     toast(`Removed ${r.removed}`); fsel.clear(); loadFailed(); loadStatus(); }
   catch (e) { toast(e.message, true); }
 });
+
+// ---------------------------------------------------------------- test a link
+$("#tl-go").addEventListener("click", async () => {
+  const out = $("#tl-result"), url = $("#tl-url").value.trim();
+  if (!url) { out.textContent = "Paste a link first."; return; }
+  out.textContent = "Checking…";
+  try {
+    const r = await api("/api/test-link", "POST", { url });
+    out.innerHTML = r.ok
+      ? `<span style="color:var(--ok)">✔ Works:</span> ${esc(r.title)}`
+      : `<span style="color:var(--bad)">✖ ${esc(r.error)}</span>`;
+  } catch (e) { out.textContent = e.message; }
+});
+$("#tl-url").addEventListener("keydown", e => { if (e.key === "Enter") $("#tl-go").click(); });
 
 // ---------------------------------------------------------------- waiting
 let waiting = [], wsel = new Set(), waitTimer;
