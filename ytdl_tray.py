@@ -54,6 +54,9 @@ HERE = Path(__file__).resolve().parent
 CONFIG_FILE = HERE / "config.yaml"
 PYTHON = sys.executable.replace("pythonw.exe", "python.exe")
 
+from flexget_channels import ensure_config
+ensure_config(CONFIG_FILE)
+
 try:
     _cfg = yaml.safe_load(CONFIG_FILE.read_text(encoding="utf-8")) or {}
 except FileNotFoundError:
@@ -69,7 +72,7 @@ UPDATE_CMD = [PYTHON if c == "python" else c
 FLEXGET_INTERVAL = float(_tray.get("interval_minutes", 120))
 LOG_MAX_MB = float(_tray.get("log_max_mb", 5))
 LOG_BACKUPS = int(_tray.get("log_backups", 3))
-STATE_DIR = Path(_paths.get("state_dir", r"T:\sync\Movies\yt-dlp"))
+STATE_DIR = Path(_paths.get("state_dir") or HERE / "data")
 LOGFILE = STATE_DIR / "tray.log"
 YTDL_CMD = [PYTHON, str(HERE / "ytdl.py"), "--config", str(CONFIG_FILE)]
 LISTS_DIR = Path(_paths.get("lists_dir") or STATE_DIR / "lists")
