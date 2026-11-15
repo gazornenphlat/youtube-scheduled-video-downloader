@@ -71,9 +71,9 @@ class Config:
         raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         p = raw.get("paths", {})
         d = raw.get("download", {})
-        self.base_output = Path(p.get("base_output", r"T:\sync\Movies"))
-        self.lists_dir = Path(p.get("lists_dir", self.base_output / "yt-dlp" / "lists"))
-        self.state_dir = Path(p.get("state_dir", self.base_output / "yt-dlp"))
+        self.base_output = Path(p.get("base_output") or HERE / "downloads")
+        self.state_dir = Path(p.get("state_dir") or HERE / "data")
+        self.lists_dir = Path(p.get("lists_dir") or self.state_dir / "lists")
         self.cookies = Path(p["cookies"]) if p.get("cookies") else None
         self.node = p.get("node")
 
@@ -324,6 +324,8 @@ def main():
     p.add_argument("--update", action="store_true", help="run yt-dlp -U first")
     args = p.parse_args()
 
+    from flexget_channels import ensure_config
+    ensure_config(args.config)
     try:
         CFG = Config(args.config)
     except FileNotFoundError:
